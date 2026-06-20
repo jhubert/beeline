@@ -82,14 +82,32 @@ impl MailAgent {
     ) -> anyhow::Result<ConnectedAccount> {
         let config = OAuthConfig::load()?;
         let identity = auth::google_authorize(&config).await?;
+        self.persist_oauth_account(Provider::Gmail, identity, alias)
+    }
 
-        let id = format!("acct_gmail_{}", slug(&identity.email));
+    /// Run the Microsoft sign-in flow and persist the account.
+    pub async fn add_microsoft_account(
+        &self,
+        alias: Option<String>,
+    ) -> anyhow::Result<ConnectedAccount> {
+        let config = OAuthConfig::load()?;
+        let identity = auth::microsoft_authorize(&config).await?;
+        self.persist_oauth_account(Provider::Microsoft, identity, alias)
+    }
+
+    fn persist_oauth_account(
+        &self,
+        provider: Provider,
+        identity: auth::ConnectedIdentity,
+        alias: Option<String>,
+    ) -> anyhow::Result<ConnectedAccount> {
+        let id = format!("acct_{}_{}", provider.as_str(), slug(&identity.email));
         let alias = alias.unwrap_or_else(|| {
             identity
                 .email
                 .split('@')
                 .next()
-                .unwrap_or("gmail")
+                .unwrap_or(provider.as_str())
                 .to_string()
         });
 
@@ -98,7 +116,7 @@ impl MailAgent {
 
         let account = ConnectedAccount {
             id,
-            provider: Provider::Gmail,
+            provider,
             alias,
             email: identity.email,
             display_name: None,
@@ -111,23 +129,23 @@ impl MailAgent {
         };
         self.db.upsert_account(&account)?;
         self.db
-            .record_audit(Some(&account.alias), Some(Provider::Gmail), "account_added", true, None)?;
+            .record_audit(Some(&account.alias), Some(provider), "account_added", true, None)?;
         Ok(account)
     }
 
     /// Obtain a fresh access token for an account, refreshing from the stored
-    /// refresh token. Stub providers (Microsoft, for now) get an empty token.
+    /// refresh token.
     async fn access_token(&self, account: &ConnectedAccount) -> anyhow::Result<String> {
+        let config = OAuthConfig::load()?;
+        let refresh = || {
+            self.secrets
+                .get(&account.id)?
+                .ok_or_else(|| anyhow::anyhow!("no stored credentials"))
+        };
         match account.provider {
-            Provider::Gmail => {
-                let config = OAuthConfig::load()?;
-                let refresh = self
-                    .secrets
-                    .get(&account.id)?
-                    .ok_or_else(|| anyhow::anyhow!("no stored credentials"))?;
-                auth::google_access_token(&config, &refresh).await
-            }
-            _ => Ok(String::new()),
+            Provider::Gmail => auth::google_access_token(&config, &refresh()?).await,
+            Provider::Microsoft => auth::microsoft_access_token(&config, &refresh()?).await,
+            Provider::Imap => Ok(String::new()),
         }
     }
 

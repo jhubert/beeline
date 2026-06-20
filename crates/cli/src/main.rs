@@ -25,7 +25,7 @@ enum Command {
     Accounts,
     /// Connect an email account via OAuth (browser sign-in).
     AddAccount {
-        /// Provider: gmail (microsoft coming soon).
+        /// Provider: gmail or microsoft.
         #[arg(long, default_value = "gmail")]
         provider: String,
         /// Optional alias; defaults to the local-part of the email.
@@ -88,16 +88,17 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
         }
-        Command::AddAccount { provider, alias } => match provider.as_str() {
-            "gmail" => {
-                let account = agent.add_gmail_account(alias).await?;
-                println!(
-                    "Connected {} as \"{}\" (read-only).",
-                    account.email, account.alias
-                );
-            }
-            other => anyhow::bail!("unsupported provider '{other}' (try: gmail)"),
-        },
+        Command::AddAccount { provider, alias } => {
+            let account = match provider.as_str() {
+                "gmail" | "google" => agent.add_gmail_account(alias).await?,
+                "microsoft" | "outlook" => agent.add_microsoft_account(alias).await?,
+                other => anyhow::bail!("unsupported provider '{other}' (try: gmail, microsoft)"),
+            };
+            println!(
+                "Connected {} as \"{}\" (read-only).",
+                account.email, account.alias
+            );
+        }
         Command::Search {
             query,
             account,

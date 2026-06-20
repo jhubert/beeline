@@ -20,6 +20,13 @@ const GOOGLE_TOKEN: &str = "https://oauth2.googleapis.com/token";
 const GMAIL_SCOPE: &str = "https://www.googleapis.com/auth/gmail.readonly";
 const GMAIL_PROFILE: &str = "https://gmail.googleapis.com/gmail/v1/users/me/profile";
 
+// Multi-tenant + personal accounts (the "common" authority) so one app covers
+// both Outlook.com (consumer MSA) and Microsoft 365 (work/school). SPEC §11.1.
+const MS_AUTH: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
+const MS_TOKEN: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
+const MS_SCOPE: &str = "openid profile offline_access Mail.Read";
+const GRAPH_ME: &str = "https://graph.microsoft.com/v1.0/me";
+
 pub struct ConnectedIdentity {
     pub email: String,
     pub refresh_token: String,
@@ -38,8 +45,7 @@ pub async fn google_authorize(config: &OAuthConfig) -> anyhow::Result<ConnectedI
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let redirect = format!("http://127.0.0.1:{}", listener.local_addr()?.port());
 
-    let verifier = random_b64url(32);
-    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+    let (verifier, challenge) = pkce();
     let state = random_b64url(16);
 
     let auth_url = format!(
@@ -114,6 +120,120 @@ pub async fn google_access_token(
     }
     let token: TokenResponse = response.json().await?;
     Ok(token.access_token)
+}
+
+/// Run the Microsoft loopback + PKCE flow. Public client — no client secret;
+/// PKCE secures the exchange. Returns the user's email + refresh token.
+pub async fn microsoft_authorize(config: &OAuthConfig) -> anyhow::Result<ConnectedIdentity> {
+    if config.microsoft_client_id.is_empty() {
+        return Err(anyhow!(
+            "missing Microsoft client id — set MAILAGENT_MICROSOFT_CLIENT_ID or ~/.mailagent/config.toml"
+        ));
+    }
+
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    // `http://localhost` is the registered loopback URI; Entra accepts any port.
+    let redirect = format!("http://localhost:{}", listener.local_addr()?.port());
+
+    let (verifier, challenge) = pkce();
+    let state = random_b64url(16);
+
+    let auth_url = format!(
+        "{MS_AUTH}?client_id={cid}&response_type=code&redirect_uri={redir}&response_mode=query\
+         &scope={scope}&code_challenge={chal}&code_challenge_method=S256&state={state}\
+         &prompt=select_account",
+        cid = urlencode(&config.microsoft_client_id),
+        redir = urlencode(&redirect),
+        scope = urlencode(MS_SCOPE),
+        chal = challenge,
+        state = state,
+    );
+
+    eprintln!("Opening your browser to sign in to Microsoft...");
+    eprintln!("If it doesn't open, paste this URL:\n{auth_url}\n");
+    let _ = std::process::Command::new("open").arg(&auth_url).spawn();
+
+    let (code, returned_state) = wait_for_redirect(&listener).await?;
+    if returned_state != state {
+        return Err(anyhow!("OAuth state mismatch — aborting"));
+    }
+
+    let client = reqwest::Client::new();
+    let token = ms_token_request(
+        &client,
+        &config.microsoft_client_id,
+        &[
+            ("grant_type", "authorization_code"),
+            ("code", code.as_str()),
+            ("redirect_uri", redirect.as_str()),
+            ("code_verifier", verifier.as_str()),
+        ],
+    )
+    .await?;
+
+    let refresh_token = token
+        .refresh_token
+        .ok_or_else(|| anyhow!("no refresh_token returned"))?;
+    let email = graph_email(&client, &token.access_token).await?;
+    Ok(ConnectedIdentity {
+        email,
+        refresh_token,
+    })
+}
+
+/// Exchange a stored Microsoft refresh token for a fresh access token.
+pub async fn microsoft_access_token(
+    config: &OAuthConfig,
+    refresh_token: &str,
+) -> anyhow::Result<String> {
+    let token = ms_token_request(
+        &reqwest::Client::new(),
+        &config.microsoft_client_id,
+        &[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", refresh_token),
+            ("scope", MS_SCOPE),
+        ],
+    )
+    .await?;
+    Ok(token.access_token)
+}
+
+async fn ms_token_request(
+    client: &reqwest::Client,
+    client_id: &str,
+    extra: &[(&str, &str)],
+) -> anyhow::Result<TokenResponse> {
+    let mut form: Vec<(&str, &str)> = vec![("client_id", client_id)];
+    form.extend_from_slice(extra);
+
+    let response = client.post(MS_TOKEN).form(&form).send().await?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(anyhow!("microsoft token request failed ({status}): {body}"));
+    }
+    Ok(response.json().await?)
+}
+
+async fn graph_email(client: &reqwest::Client, access_token: &str) -> anyhow::Result<String> {
+    #[derive(Deserialize)]
+    struct Me {
+        mail: Option<String>,
+        #[serde(rename = "userPrincipalName")]
+        user_principal_name: Option<String>,
+    }
+    let me: Me = client
+        .get(GRAPH_ME)
+        .bearer_auth(access_token)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    me.mail
+        .or(me.user_principal_name)
+        .ok_or_else(|| anyhow!("could not determine account email"))
 }
 
 async fn gmail_email(client: &reqwest::Client, access_token: &str) -> anyhow::Result<String> {
@@ -194,6 +314,13 @@ fn random_b64url(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
     rand::thread_rng().fill_bytes(&mut buf);
     URL_SAFE_NO_PAD.encode(buf)
+}
+
+/// PKCE (verifier, S256 challenge).
+fn pkce() -> (String, String) {
+    let verifier = random_b64url(32);
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+    (verifier, challenge)
 }
 
 /// Percent-encode a query component (unreserved chars per RFC 3986).
