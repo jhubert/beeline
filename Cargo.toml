@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/types",
+    "crates/providers",
+    "crates/storage",
+    "crates/core",
+    "crates/mcp",
+    "crates/control",
+    "crates/cli",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+thiserror = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+
+# internal crates
+mailagent-types = { path = "crates/types" }
+mailagent-providers = { path = "crates/providers" }
+mailagent-storage = { path = "crates/storage" }
+mailagent-core = { path = "crates/core" }
+mailagent-mcp = { path = "crates/mcp" }
+mailagent-control = { path = "crates/control" }

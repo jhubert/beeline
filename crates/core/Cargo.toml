@@ -1,0 +1,18 @@
+[package]
+name = "mailagent-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mailagent-types.workspace = true
+mailagent-providers.workspace = true
+mailagent-storage.workspace = true
+serde.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+sha2.workspace = true
+base64.workspace = true
+rand.workspace = true
+toml = "0.8"

@@ -1,0 +1,13 @@
+[package]
+name = "mailagent-providers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mailagent-types.workspace = true
+serde.workspace = true
+async-trait.workspace = true
+thiserror.workspace = true
+reqwest.workspace = true
+base64.workspace = true

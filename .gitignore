@@ -1,0 +1,14 @@
+/target
+**/*.rs.bk
+*.pdb
+
+# local dev data — never commit tokens / caches / db
+*.sqlite
+*.sqlite-*
+.mailagent/
+
+# local OAuth client config — never commit (fill from config.example.sh)
+config.sh
+
+# internal design spec — kept local, not distributed
+SPEC.md

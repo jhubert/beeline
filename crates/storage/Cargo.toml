@@ -1,0 +1,18 @@
+[package]
+name = "mailagent-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mailagent-types.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+# bundled: compile SQLite from source, no system dependency (SPEC.md §10.2).
+rusqlite = { version = "0.32", features = ["bundled"] }
+# cross-platform secret store: macOS Keychain now, Windows Credential Manager
+# later, with no code change at the call site (SPEC.md §10.1).
+# IMPORTANT: keyring v3 silently uses an in-memory MOCK store unless a backend
+# feature is enabled. `apple-native` = real macOS Keychain. Add `windows-native`
+# / `sync-secret-service` when those targets are supported.
+keyring = { version = "3", features = ["apple-native"] }

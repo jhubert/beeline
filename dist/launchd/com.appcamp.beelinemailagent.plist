@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent for the Beeline control daemon (daemon model B).
+
+  Per-user agent: the binary is the persistent thing; the GUI is a transient
+  client of the control socket. Install:
+
+      cp dist/launchd/com.appcamp.beelinemailagent.plist ~/Library/LaunchAgents/
+      launchctl load ~/Library/LaunchAgents/com.appcamp.beelinemailagent.plist
+
+  Update the ProgramArguments path to the installed binary. During development
+  point it at target/debug/mailagent.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.appcamp.beelinemailagent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/MailAgent.app/Contents/MacOS/mailagent</string>
+        <string>serve</string>
+    </array>
+
+    <!-- Start at login and keep the daemon alive (model B). -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/mailagent.serve.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/mailagent.serve.log</string>
+</dict>
+</plist>

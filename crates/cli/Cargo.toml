@@ -1,0 +1,19 @@
+[package]
+name = "mailagent-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mailagent"
+path = "src/main.rs"
+
+[dependencies]
+mailagent-core.workspace = true
+mailagent-mcp.workspace = true
+mailagent-control.workspace = true
+mailagent-types.workspace = true
+clap.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
