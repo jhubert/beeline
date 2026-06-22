@@ -1,0 +1,20 @@
+[package]
+name = "beeline-desktop"
+version = "0.0.1"
+edition = "2021"
+description = "Beeline — local-first AI mail agent"
+
+[build-dependencies]
+tauri-build = { version = "2" }
+
+[dependencies]
+tauri = { version = "2" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+mailagent-core = { path = "../../../crates/core" }
+mailagent-types = { path = "../../../crates/types" }
+
+# Standalone workspace so the Tauri/WebKit dependency tree stays out of the
+# core workspace (keeps `cargo build` at the repo root lean).
+[workspace]

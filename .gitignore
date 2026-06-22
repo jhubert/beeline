@@ -2,6 +2,16 @@
 **/*.rs.bk
 *.pdb
 
+# desktop app build artifacts
+apps/**/target/
+node_modules/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/icons/
+apps/desktop/src-tauri/binaries/
+
+# notarization secrets (Apple ID + app-specific password)
+notarize.env
+
 # local dev data — never commit tokens / caches / db
 *.sqlite
 *.sqlite-*

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Beeline</title>
+    <style>
+      :root {
+        --honey: #f4a521;
+        --honey-light: #ffc94d;
+        --ink: #2b2b2b;
+        --muted: #6b6b6b;
+        --bg: #fffaf0;
+        --card: #ffffff;
+        --err: #b3261e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: -apple-system, system-ui, sans-serif;
+        margin: 0;
+        color: var(--ink);
+        background: var(--bg);
+      }
+      header {
+        background: linear-gradient(135deg, var(--honey-light), var(--honey));
+        padding: 20px 28px;
+        font-size: 22px;
+        font-weight: 700;
+      }
+      main { padding: 24px 28px; max-width: 720px; }
+      section { margin-bottom: 28px; }
+      h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+      .acct {
+        display: flex; align-items: center; justify-content: space-between;
+        background: var(--card); border: 1px solid #eee; border-radius: 10px;
+        padding: 12px 14px; margin-bottom: 8px;
+      }
+      .row { margin-top: 12px; display: flex; gap: 10px; }
+      button {
+        font-size: 14px; font-weight: 600; cursor: pointer;
+        border: none; border-radius: 8px; padding: 9px 14px;
+        background: var(--honey); color: #3a2a00;
+      }
+      button.secondary { background: #eee; color: var(--ink); }
+      button:hover { filter: brightness(1.05); }
+      #status { min-height: 20px; font-size: 13px; color: var(--muted); }
+      #status.err { color: var(--err); }
+      em { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <header>🐝 Beeline</header>
+    <main>
+      <section>
+        <h2>Email accounts</h2>
+        <div id="account-list"><em>Loading…</em></div>
+        <div class="row">
+          <button id="add-gmail">Add Gmail</button>
+          <button id="add-outlook">Add Outlook</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>AI client</h2>
+        <button id="connect-claude" class="secondary">Connect to Claude Desktop</button>
+      </section>
+
+      <p id="status"></p>
+    </main>
+
+    <script>
+      const invoke = window.__TAURI__.core.invoke;
+      const statusEl = document.getElementById("status");
+      const setStatus = (msg, isErr) => {
+        statusEl.textContent = msg;
+        statusEl.className = isErr ? "err" : "";
+      };
+
+      async function refresh() {
+        try {
+          const accounts = await invoke("get_accounts");
+          const list = document.getElementById("account-list");
+          if (!accounts.length) {
+            list.innerHTML = "<em>No accounts yet — add one below.</em>";
+            return;
+          }
+          list.innerHTML = "";
+          for (const a of accounts) {
+            const row = document.createElement("div");
+            row.className = "acct";
+            const label = document.createElement("span");
+            label.innerHTML = `<b>${a.alias}</b> · ${a.email} · ${a.provider} · ${a.status}`;
+            const remove = document.createElement("button");
+            remove.className = "secondary";
+            remove.textContent = "Remove";
+            remove.onclick = async () => {
+              await invoke("remove_account", { account: a.id });
+              refresh();
+            };
+            row.append(label, remove);
+            list.appendChild(row);
+          }
+        } catch (e) {
+          setStatus(String(e), true);
+        }
+      }
+
+      async function addAccount(provider) {
+        setStatus("Opening your browser to sign in…");
+        try {
+          const a = await invoke("add_account", { provider });
+          setStatus(`Connected ${a.email}.`);
+          refresh();
+        } catch (e) {
+          setStatus(String(e), true);
+        }
+      }
+
+      document.getElementById("add-gmail").onclick = () => addAccount("gmail");
+      document.getElementById("add-outlook").onclick = () => addAccount("microsoft");
+      document.getElementById("connect-claude").onclick = async () => {
+        try {
+          await invoke("connect_claude");
+          setStatus("Connected to Claude Desktop — restart it to load Beeline's tools.");
+        } catch (e) {
+          setStatus(String(e), true);
+        }
+      };
+
+      refresh();
+    </script>
+  </body>
+</html>
