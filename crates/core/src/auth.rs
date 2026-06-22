@@ -31,6 +31,23 @@ pub struct ConnectedIdentity {
     pub refresh_token: String,
 }
 
+/// A failed access-token refresh. `needs_reconnect` is true when the provider
+/// rejected the refresh token itself (expired/revoked) — distinct from a
+/// transient network or config error, which shouldn't flip an account's status.
+#[derive(Debug)]
+pub struct TokenRefreshError {
+    pub needs_reconnect: bool,
+    pub detail: String,
+}
+
+impl std::fmt::Display for TokenRefreshError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.detail)
+    }
+}
+
+impl std::error::Error for TokenRefreshError {}
+
 #[derive(Deserialize)]
 struct TokenResponse {
     access_token: String,
@@ -38,6 +55,31 @@ struct TokenResponse {
     refresh_token: Option<String>,
     #[serde(default)]
     id_token: Option<String>,
+}
+
+/// Interpret a token-endpoint response for a refresh request. A 400/401 means
+/// the refresh token was rejected → the account needs reconnecting.
+async fn refresh_response(response: reqwest::Response) -> Result<String, TokenRefreshError> {
+    let status = response.status();
+    if status.is_success() {
+        let token: TokenResponse = response.json().await.map_err(|e| TokenRefreshError {
+            needs_reconnect: false,
+            detail: e.to_string(),
+        })?;
+        return Ok(token.access_token);
+    }
+    let body = response.text().await.unwrap_or_default();
+    Err(TokenRefreshError {
+        needs_reconnect: matches!(status.as_u16(), 400 | 401),
+        detail: format!("token refresh failed ({status}): {body}"),
+    })
+}
+
+fn send_error(e: reqwest::Error) -> TokenRefreshError {
+    TokenRefreshError {
+        needs_reconnect: false,
+        detail: e.to_string(),
+    }
 }
 
 /// Run the Google loopback + PKCE authorization flow: open the browser, wait for
@@ -101,7 +143,7 @@ pub async fn google_authorize(config: &OAuthConfig) -> anyhow::Result<ConnectedI
 pub async fn google_access_token(
     config: &OAuthConfig,
     refresh_token: &str,
-) -> anyhow::Result<String> {
+) -> Result<String, TokenRefreshError> {
     let response = reqwest::Client::new()
         .post(GOOGLE_TOKEN)
         .form(&[
@@ -111,16 +153,9 @@ pub async fn google_access_token(
             ("grant_type", "refresh_token"),
         ])
         .send()
-        .await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        // Surface Google's error body (e.g. {"error":"invalid_grant"}).
-        let body = response.text().await.unwrap_or_default();
-        return Err(anyhow!("token refresh failed ({status}): {body}"));
-    }
-    let token: TokenResponse = response.json().await?;
-    Ok(token.access_token)
+        .await
+        .map_err(send_error)?;
+    refresh_response(response).await
 }
 
 /// Run the Microsoft loopback + PKCE flow. Public client — no client secret;
@@ -209,18 +244,19 @@ fn email_from_id_token(id_token: &str) -> Option<String> {
 pub async fn microsoft_access_token(
     config: &OAuthConfig,
     refresh_token: &str,
-) -> anyhow::Result<String> {
-    let token = ms_token_request(
-        &reqwest::Client::new(),
-        &config.microsoft_client_id,
-        &[
+) -> Result<String, TokenRefreshError> {
+    let response = reqwest::Client::new()
+        .post(MS_TOKEN)
+        .form(&[
+            ("client_id", config.microsoft_client_id.as_str()),
             ("grant_type", "refresh_token"),
             ("refresh_token", refresh_token),
             ("scope", MS_SCOPE),
-        ],
-    )
-    .await?;
-    Ok(token.access_token)
+        ])
+        .send()
+        .await
+        .map_err(send_error)?;
+    refresh_response(response).await
 }
 
 async fn ms_token_request(

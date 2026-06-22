@@ -48,6 +48,8 @@ enum Command {
     },
     /// Read a message by its localMessageId (from search results).
     Read { local_message_id: String },
+    /// Re-authorize an account whose token expired or was revoked.
+    Reconnect { account: String },
     /// Disconnect an account (by alias or id) and delete its local token.
     RemoveAccount { account: String },
     /// Register Beeline's MCP server in an AI client's config (e.g. claude).
@@ -143,6 +145,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
             println!("\n{}", d.body_text);
+        }
+        Command::Reconnect { account } => {
+            let a = agent.reconnect_account(&account).await?;
+            println!("Reconnected {} ({}).", a.alias, a.email);
         }
         Command::RemoveAccount { account } => {
             let email = agent.remove_account(&account)?;

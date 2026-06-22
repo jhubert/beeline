@@ -90,8 +90,30 @@
           for (const a of accounts) {
             const row = document.createElement("div");
             row.className = "acct";
+
+            const needsReconnect = a.status === "needs_reconnect";
             const label = document.createElement("span");
-            label.innerHTML = `<b>${a.alias}</b> · ${a.email} · ${a.provider} · ${a.status}`;
+            const statusText = needsReconnect
+              ? '<span style="color:var(--err)">needs reconnect</span>'
+              : a.status;
+            label.innerHTML = `<b>${a.alias}</b> · ${a.email} · ${a.provider} · ${statusText}`;
+
+            const actions = document.createElement("span");
+            if (needsReconnect) {
+              const reconnect = document.createElement("button");
+              reconnect.textContent = "Reconnect";
+              reconnect.onclick = async () => {
+                setStatus(`Reconnecting ${a.email}…`);
+                try {
+                  await invoke("reconnect_account", { account: a.id });
+                  setStatus(`Reconnected ${a.email}.`);
+                  refresh();
+                } catch (e) {
+                  setStatus(String(e), true);
+                }
+              };
+              actions.appendChild(reconnect);
+            }
             const remove = document.createElement("button");
             remove.className = "secondary";
             remove.textContent = "Remove";
@@ -99,7 +121,9 @@
               await invoke("remove_account", { account: a.id });
               refresh();
             };
-            row.append(label, remove);
+            actions.appendChild(remove);
+
+            row.append(label, actions);
             list.appendChild(row);
           }
         } catch (e) {

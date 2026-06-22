@@ -27,6 +27,14 @@ async fn add_account(
 }
 
 #[tauri::command]
+async fn reconnect_account(
+    account: String,
+    agent: tauri::State<'_, MailAgent>,
+) -> Result<ConnectedAccount, String> {
+    agent.reconnect_account(&account).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn remove_account(account: String, agent: tauri::State<'_, MailAgent>) -> Result<(), String> {
     agent.remove_account(&account).map(|_| ()).map_err(|e| e.to_string())
 }
@@ -51,6 +59,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_accounts,
             add_account,
+            reconnect_account,
             remove_account,
             set_permissions
         ])

@@ -134,19 +134,80 @@ impl MailAgent {
     }
 
     /// Obtain a fresh access token for an account, refreshing from the stored
-    /// refresh token.
+    /// refresh token. If the provider rejects the refresh token (expired or
+    /// revoked), the account is marked `needs_reconnect` so the UI can surface it.
     async fn access_token(&self, account: &ConnectedAccount) -> anyhow::Result<String> {
-        let config = OAuthConfig::load()?;
-        let refresh = || {
-            self.secrets
-                .get(&account.id)?
-                .ok_or_else(|| anyhow::anyhow!("no stored credentials"))
-        };
-        match account.provider {
-            Provider::Gmail => auth::google_access_token(&config, &refresh()?).await,
-            Provider::Microsoft => auth::microsoft_access_token(&config, &refresh()?).await,
-            Provider::Imap => Ok(String::new()),
+        if account.provider == Provider::Imap {
+            return Ok(String::new());
         }
+        let config = OAuthConfig::load()?;
+        let refresh = match self.secrets.get(&account.id)? {
+            Some(token) => token,
+            None => {
+                // No stored token (e.g. revoked at the provider) → reconnect.
+                let _ = self
+                    .db
+                    .set_account_status(&account.id, AccountStatus::NeedsReconnect);
+                anyhow::bail!("needs_reconnect");
+            }
+        };
+
+        let result = match account.provider {
+            Provider::Gmail => auth::google_access_token(&config, &refresh).await,
+            Provider::Microsoft => auth::microsoft_access_token(&config, &refresh).await,
+            Provider::Imap => unreachable!(),
+        };
+
+        match result {
+            Ok(token) => Ok(token),
+            Err(e) if e.needs_reconnect => {
+                let _ = self
+                    .db
+                    .set_account_status(&account.id, AccountStatus::NeedsReconnect);
+                anyhow::bail!("needs_reconnect")
+            }
+            Err(e) => anyhow::bail!(e.detail),
+        }
+    }
+
+    /// Re-authorize an account whose token expired or was revoked: re-run the
+    /// provider sign-in, verify the same email, store the fresh token, and clear
+    /// the `needs_reconnect` status.
+    pub async fn reconnect_account(&self, alias_or_id: &str) -> anyhow::Result<ConnectedAccount> {
+        let mut account = self
+            .db
+            .list_accounts()?
+            .into_iter()
+            .find(|a| a.alias == alias_or_id || a.id == alias_or_id)
+            .ok_or_else(|| anyhow::anyhow!("no account matching '{alias_or_id}'"))?;
+
+        let config = OAuthConfig::load()?;
+        let identity = match account.provider {
+            Provider::Gmail => auth::google_authorize(&config).await?,
+            Provider::Microsoft => auth::microsoft_authorize(&config).await?,
+            Provider::Imap => anyhow::bail!("reconnect not supported for this provider"),
+        };
+
+        if !identity.email.eq_ignore_ascii_case(&account.email) {
+            anyhow::bail!(
+                "signed in as {} but this account is {} — use add-account to add a different account",
+                identity.email,
+                account.email
+            );
+        }
+
+        self.secrets.set(&account.id, &identity.refresh_token)?;
+        self.db
+            .set_account_status(&account.id, AccountStatus::Connected)?;
+        self.db.record_audit(
+            Some(&account.alias),
+            Some(account.provider),
+            "account_reconnected",
+            true,
+            None,
+        )?;
+        account.status = AccountStatus::Connected;
+        Ok(account)
     }
 
     /// Disconnect an account: delete its token from the Keychain and its row +

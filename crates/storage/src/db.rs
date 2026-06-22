@@ -156,6 +156,15 @@ impl Db {
         Ok(())
     }
 
+    pub fn set_account_status(&self, id: &str, status: AccountStatus) -> anyhow::Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let changed = conn.execute(
+            "UPDATE accounts SET status = ?1, updated_at = datetime('now') WHERE id = ?2",
+            params![status.as_str(), id],
+        )?;
+        Ok(changed > 0)
+    }
+
     /// Delete an account and its local-id mappings. Returns false if no such
     /// account existed. (Keychain token removal is the caller's job.)
     pub fn delete_account(&self, id: &str) -> anyhow::Result<bool> {
@@ -491,6 +500,31 @@ mod tests {
         let reloaded = db.get_account("acct_personal").unwrap().unwrap();
         assert!(reloaded.permissions.modify);
         assert_eq!(db.recent_audit(10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn account_status_updates_and_persists() {
+        let db = Db::open_in_memory().unwrap();
+        db.seed_demo_accounts_if_empty().unwrap();
+
+        assert!(db
+            .set_account_status("acct_personal", AccountStatus::NeedsReconnect)
+            .unwrap());
+        let account = db.get_account("acct_personal").unwrap().unwrap();
+        assert_eq!(account.status, AccountStatus::NeedsReconnect);
+
+        // Reconnecting clears it.
+        db.set_account_status("acct_personal", AccountStatus::Connected)
+            .unwrap();
+        assert_eq!(
+            db.get_account("acct_personal").unwrap().unwrap().status,
+            AccountStatus::Connected
+        );
+
+        // Unknown id → false, not an error.
+        assert!(!db
+            .set_account_status("nope", AccountStatus::Connected)
+            .unwrap());
     }
 
     #[test]
