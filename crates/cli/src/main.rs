@@ -50,6 +50,11 @@ enum Command {
     Read { local_message_id: String },
     /// Disconnect an account (by alias or id) and delete its local token.
     RemoveAccount { account: String },
+    /// Register Beeline's MCP server in an AI client's config (e.g. claude).
+    InstallMcp {
+        #[arg(default_value = "claude")]
+        client: String,
+    },
     /// Start the MCP server on stdio (launched by AI clients).
     Mcp,
     /// Run the control-API daemon for the GUI (launchd login-item, model B).
@@ -142,6 +147,14 @@ async fn main() -> anyhow::Result<()> {
         Command::RemoveAccount { account } => {
             let email = agent.remove_account(&account)?;
             println!("Removed {account} ({email}).");
+        }
+        Command::InstallMcp { client } => {
+            let exe = std::env::current_exe()?;
+            let path = mailagent_core::install_mcp_client(&client, &exe)?;
+            println!(
+                "Registered Beeline with {client}: {}\nRestart {client} to load the tools.",
+                path.display()
+            );
         }
         Command::Mcp => mailagent_mcp::run_stdio(agent).await?,
         Command::Serve => {

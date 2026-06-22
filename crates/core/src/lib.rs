@@ -360,3 +360,56 @@ fn data_dir() -> anyhow::Result<PathBuf> {
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }
+
+/// Register Beeline's MCP server in an AI client's config (SPEC.md §16.4).
+/// `mcp_binary` is the path to the `mailagent` binary the client should spawn
+/// with `mcp` — the CLI passes its own path; the GUI passes the helper binary
+/// bundled in the .app. Merges into any existing config (backed up first) so
+/// other MCP servers and settings are preserved. Returns the config path.
+pub fn install_mcp_client(client: &str, mcp_binary: &Path) -> anyhow::Result<PathBuf> {
+    let config_path = match client {
+        "claude" | "claude-desktop" => {
+            let home = std::env::var("HOME").map_err(|_| anyhow::anyhow!("HOME is not set"))?;
+            PathBuf::from(home)
+                .join("Library/Application Support/Claude/claude_desktop_config.json")
+        }
+        other => anyhow::bail!("unsupported client '{other}' (try: claude)"),
+    };
+
+    if let Some(dir) = config_path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+
+    let mut config: serde_json::Value = if config_path.exists() {
+        // Back up before touching a user's existing config.
+        let _ = std::fs::copy(&config_path, config_path.with_extension("json.bak"));
+        std::fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_else(|| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    if !config.is_object() {
+        config = serde_json::json!({});
+    }
+    let servers = config
+        .as_object_mut()
+        .unwrap()
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}));
+    servers
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("mcpServers in config is not an object"))?
+        .insert(
+            "beeline".to_string(),
+            serde_json::json!({
+                "command": mcp_binary.to_string_lossy(),
+                "args": ["mcp"],
+            }),
+        );
+
+    std::fs::write(&config_path, serde_json::to_string_pretty(&config)? + "\n")?;
+    Ok(config_path)
+}
