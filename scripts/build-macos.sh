@@ -43,7 +43,10 @@ if [[ ! -f src-tauri/icons/icon.icns ]]; then
 fi
 
 echo "==> tauri build (sign$([[ -n "${APPLE_ID:-}" ]] && echo " + notarize") + dmg)"
-pnpm tauri build
+# externalBin is injected only for the release bundle (so the helper is shipped
+# beside the app); it's omitted from the base config so `tauri dev` doesn't
+# require the staged sidecar.
+pnpm tauri build --config '{"bundle":{"externalBin":["binaries/mailagent"]}}'
 
 echo
 echo "==> Done. Bundles:"

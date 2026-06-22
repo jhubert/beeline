@@ -30,7 +30,6 @@
       "icons/128x128.png",
       "icons/icon.icns"
     ],
-    "externalBin": ["binaries/mailagent"],
     "macOS": {
       "minimumSystemVersion": "11.0"
     }
