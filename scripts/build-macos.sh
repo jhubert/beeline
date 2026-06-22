@@ -2,14 +2,20 @@
 #
 # Build a signed + notarized Beeline.app and DMG.
 #
-# Notarization needs an Apple ID + app-specific password. Put them in a
-# gitignored notarize.env at the repo root and `source` it first, e.g.:
+# Notarization needs an Apple ID + app-specific password. Unlike the
+# LegalMessageExport build (which uses a notarytool keychain profile), Tauri's
+# bundler reads these from the environment, so put them in a gitignored
+# notarize.env at the repo root and `source` it first, e.g.:
 #
-#   export APPLE_ID="you@example.com"
+#   export APPLE_ID="jeremy@appcamp.com"
 #   export APPLE_PASSWORD="abcd-efgh-ijkl-mnop"   # app-specific password
 #
-# Signing identity + team default to the Developer ID cert on this machine;
-# override by exporting APPLE_SIGNING_IDENTITY / APPLE_TEAM_ID.
+# The app-specific password is per-Apple-ID, not per-app: the same one behind
+# the LMR-notary profile works here. If you don't have its value saved, make a
+# fresh one at appleid.apple.com → Sign-In & Security → App-Specific Passwords.
+#
+# Signing identity + team default to the AppCamp Developer ID cert; override by
+# exporting APPLE_SIGNING_IDENTITY / APPLE_TEAM_ID.
 #
 set -euo pipefail
 
