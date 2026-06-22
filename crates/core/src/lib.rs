@@ -317,7 +317,7 @@ impl MailAgent {
                 Err(e) => {
                     partial_failures.push(PartialFailure {
                         account_alias: account.alias.clone(),
-                        reason: format!("{}: {e}", AccountStatus::NeedsReconnect.as_str()),
+                        reason: e.to_string(),
                     });
                     continue;
                 }
