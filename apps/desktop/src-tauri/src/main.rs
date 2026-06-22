@@ -4,8 +4,6 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::path::PathBuf;
-
 use mailagent_core::MailAgent;
 use mailagent_types::{ConnectedAccount, Permissions};
 
@@ -44,28 +42,6 @@ async fn set_permissions(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-async fn connect_claude() -> Result<String, String> {
-    let binary = resolve_mailagent_binary()?;
-    let path = mailagent_core::install_mcp_client("claude", &binary).map_err(|e| e.to_string())?;
-    Ok(path.to_string_lossy().into_owned())
-}
-
-/// Locate the `mailagent` helper the AI client should spawn. In a bundled app
-/// it sits beside the GUI binary; in dev, point at it via BEELINE_MCP_BIN.
-fn resolve_mailagent_binary() -> Result<PathBuf, String> {
-    if let Ok(path) = std::env::var("BEELINE_MCP_BIN") {
-        return Ok(PathBuf::from(path));
-    }
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    if let Some(sibling) = exe.parent().map(|d| d.join("mailagent")) {
-        if sibling.exists() {
-            return Ok(sibling);
-        }
-    }
-    Err("mailagent helper not found — set BEELINE_MCP_BIN in dev, or bundle it beside the app".into())
-}
-
 fn main() {
     let db_path = mailagent_core::default_db_path().expect("resolve data dir");
     let agent = MailAgent::open(&db_path).expect("open mailagent store");
@@ -76,8 +52,7 @@ fn main() {
             get_accounts,
             add_account,
             remove_account,
-            set_permissions,
-            connect_claude
+            set_permissions
         ])
         .run(tauri::generate_context!())
         .expect("error while running Beeline");

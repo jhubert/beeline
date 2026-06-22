@@ -60,12 +60,14 @@
         </div>
       </section>
 
-      <section>
-        <h2>AI client</h2>
-        <button id="connect-claude" class="secondary">Connect to Claude Desktop</button>
-      </section>
-
       <p id="status"></p>
+
+      <p style="font-size:12px;color:var(--muted);margin-top:24px">
+        Beeline runs entirely on your Mac — no servers, and it never transmits
+        your mail anywhere. To use it with an AI assistant or your own scripts,
+        point an MCP client at <code>mailagent mcp</code>.
+        <a href="https://github.com/jhubert/beeline#connecting-a-client" target="_blank">Learn how →</a>
+      </p>
     </main>
 
     <script>
@@ -118,14 +120,6 @@
 
       document.getElementById("add-gmail").onclick = () => addAccount("gmail");
       document.getElementById("add-outlook").onclick = () => addAccount("microsoft");
-      document.getElementById("connect-claude").onclick = async () => {
-        try {
-          await invoke("connect_claude");
-          setStatus("Connected to Claude Desktop — restart it to load Beeline's tools.");
-        } catch (e) {
-          setStatus(String(e), true);
-        }
-      };
 
       refresh();
     </script>

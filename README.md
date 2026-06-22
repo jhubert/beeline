@@ -1,62 +1,87 @@
-# mailagent
+# Beeline
 
-Local-first AI mail agent. A single distributable binary that exposes mail
-tools to AI clients over MCP, keeping OAuth tokens and email contents on the
-user's machine. See [SPEC.md](./SPEC.md) for the full product spec.
+Beeline gives you local, programmatic access to your own email. It runs
+**entirely on your Mac** — it has no servers and **never transmits your mail
+anywhere**. Connect it to your own tools (an AI assistant via MCP, or scripts
+via the CLI); what you do with your mail is up to you.
+
+A single `mailagent` binary is the product: a CLI, a local [MCP](https://modelcontextprotocol.io)
+server, and (optionally) a small desktop app for managing accounts. Tokens live
+in the macOS Keychain; account metadata in a local SQLite store.
+
+## What it is — and isn't
+
+- **It is** a local capability layer for your mailboxes: search, read, and
+  (soon) draft across Gmail and Outlook/Microsoft 365 behind one interface.
+- **It isn't** a hosted service, a mail client, or an AI product. Beeline does
+  not bundle, endorse, or route your mail to any AI on its own. If *you* connect
+  an AI assistant, *you* are directing your data to that service — Beeline is
+  just the local conduit you control.
 
 ## Architecture
 
-The **binary is the product**; the GUI is an optional usability client.
-
 ```
-AI clients ──(MCP, stdio)──┐
-                           ├──▶  mailagent (binary)  ──▶ SQLite + Keychain
-GUI / CLI ──(control UDS)──┘     core: accounts/auth/
-                                 policy/storage/audit/local-ids
-                                        │
-                                 provider adapters: Gmail · Microsoft Graph
+your MCP client ──(MCP, stdio)──┐
+(AI assistant, you connect it)  ├──▶  mailagent  ──▶ SQLite + Keychain (local)
+CLI / desktop app ──────────────┘     core: accounts / auth / policy /
+                                       storage / audit / local-ids
+                                              │
+                                       providers: Gmail · Microsoft Graph
 ```
-
-Two local interfaces, two audiences: **MCP over stdio** (agent-facing,
-permission-gated) and a **control API over a unix-domain socket** (human-facing,
-driven by the CLI and the optional GUI). A `launchd` login-item keeps the
-daemon alive independent of the GUI (daemon model B).
 
 ## Workspace layout
 
-| Crate                  | Role                                                        |
-|------------------------|-------------------------------------------------------------|
-| `crates/types`         | Normalized data model (SPEC §8), camelCase JSON             |
-| `crates/providers`     | `MailProvider` trait (SPEC §7) + Gmail/Graph adapters       |
-| `crates/core`          | `MailAgent` facade, local-id map (§9), policy (§12)         |
-| `crates/mcp`           | MCP server: JSON-RPC 2.0 over stdio                         |
-| `crates/cli`           | `mailagent` binary: doctor / accounts / mcp / serve         |
+| Crate              | Role                                                       |
+|--------------------|------------------------------------------------------------|
+| `crates/types`     | Normalized data model, camelCase JSON                      |
+| `crates/providers` | `MailProvider` trait + Gmail and Microsoft Graph adapters  |
+| `crates/storage`   | SQLite (accounts, local-ids, audit, confirmations) + Keychain |
+| `crates/core`      | `MailAgent` facade, OAuth (PKCE), policy, local-id map      |
+| `crates/mcp`       | MCP server: JSON-RPC 2.0 over stdio                        |
+| `crates/control`   | Control API over a unix-domain socket (human-facing)       |
+| `crates/cli`       | `mailagent` binary                                         |
+| `apps/desktop`     | Tauri app for account onboarding/management                |
 
-## Status: Phase 0 skeleton
-
-Providers return **stubbed data** so the MCP read path runs end-to-end before
-any OAuth client registration exists. Read-only tools are wired:
-`mail_list_accounts`, `mail_search`, `mail_get_message`.
-
-Not yet implemented: real Gmail/Graph HTTP, OAuth, Keychain, SQLite, the
-control-API daemon, draft/mutating tools, and the confirmation flow.
-
-## Build & run
+## Quick start (CLI)
 
 ```sh
 cargo build
-cargo run -p mailagent-cli -- doctor
-cargo run -p mailagent-cli -- accounts
-
-# Smoke-test the MCP server over stdio:
-printf '%s\n' \
-  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
-  '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"mail_search","arguments":{"account":"all","query":"agenda"}}}' \
-  | cargo run -q -p mailagent-cli -- mcp
+cp config.example.toml ~/.mailagent/config.toml   # add your OAuth client ids
+./target/debug/mailagent add-account --provider gmail
+./target/debug/mailagent add-account --provider microsoft
+./target/debug/mailagent search --account all "from:bruce"
+./target/debug/mailagent read <localMessageId>
 ```
 
-## Prerequisites for real functionality
+OAuth client config is read from `~/.mailagent/config.toml` (or env vars). See
+`config.example.toml`.
 
-1. Microsoft Entra **public client** app registration.
-2. Google OAuth **desktop client** (+ start restricted-scope verification early).
+## Connecting a client
+
+Beeline exposes its tools over MCP on stdio. Point any MCP client at the binary:
+
+```json
+{
+  "mcpServers": {
+    "beeline": { "command": "/path/to/mailagent", "args": ["mcp"] }
+  }
+}
+```
+
+For Claude Desktop, `mailagent install-mcp claude` will write that entry for you
+(it only edits the client's local config — it does not move any mail). Then
+restart the client.
+
+> Note: once you connect an AI assistant and ask it to read your mail, that
+> message content is sent to **your AI provider** (e.g. Anthropic, OpenAI) so
+> the assistant can reason over it. Beeline never sees or stores it — but it
+> does leave your Mac at that point, by your choice. Beeline itself transmits
+> nothing.
+
+## Privacy
+
+- No Beeline/AppCamp servers. Mail is fetched directly from your provider to
+  your Mac and held only in memory to answer a request.
+- OAuth tokens are stored only in the macOS Keychain, never on disk in plaintext
+  and never transmitted off-device.
+- Minimal scopes (read-only by default). Per-account permissions.
