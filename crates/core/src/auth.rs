@@ -25,7 +25,6 @@ const GMAIL_PROFILE: &str = "https://gmail.googleapis.com/gmail/v1/users/me/prof
 const MS_AUTH: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
 const MS_TOKEN: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 const MS_SCOPE: &str = "openid profile offline_access Mail.Read";
-const GRAPH_ME: &str = "https://graph.microsoft.com/v1.0/me";
 
 pub struct ConnectedIdentity {
     pub email: String,
@@ -37,6 +36,8 @@ struct TokenResponse {
     access_token: String,
     #[serde(default)]
     refresh_token: Option<String>,
+    #[serde(default)]
+    id_token: Option<String>,
 }
 
 /// Run the Google loopback + PKCE authorization flow: open the browser, wait for
@@ -174,11 +175,34 @@ pub async fn microsoft_authorize(config: &OAuthConfig) -> anyhow::Result<Connect
     let refresh_token = token
         .refresh_token
         .ok_or_else(|| anyhow!("no refresh_token returned"))?;
-    let email = graph_email(&client, &token.access_token).await?;
+    // Read the email from the id_token claims (we requested `openid`), avoiding
+    // a Graph /me call and the extra User.Read scope it would require.
+    let email = token
+        .id_token
+        .as_deref()
+        .and_then(email_from_id_token)
+        .ok_or_else(|| anyhow!("could not read email from id_token"))?;
     Ok(ConnectedIdentity {
         email,
         refresh_token,
     })
+}
+
+/// Extract the account email from an OIDC id_token's claims (no signature
+/// verification needed — the token came straight from the token endpoint over
+/// TLS, and we only use it to label the account).
+fn email_from_id_token(id_token: &str) -> Option<String> {
+    let payload = id_token.split('.').nth(1)?;
+    let bytes = URL_SAFE_NO_PAD.decode(payload).ok()?;
+
+    #[derive(Deserialize)]
+    struct Claims {
+        email: Option<String>,
+        preferred_username: Option<String>,
+        upn: Option<String>,
+    }
+    let claims: Claims = serde_json::from_slice(&bytes).ok()?;
+    claims.email.or(claims.preferred_username).or(claims.upn)
 }
 
 /// Exchange a stored Microsoft refresh token for a fresh access token.
@@ -214,26 +238,6 @@ async fn ms_token_request(
         return Err(anyhow!("microsoft token request failed ({status}): {body}"));
     }
     Ok(response.json().await?)
-}
-
-async fn graph_email(client: &reqwest::Client, access_token: &str) -> anyhow::Result<String> {
-    #[derive(Deserialize)]
-    struct Me {
-        mail: Option<String>,
-        #[serde(rename = "userPrincipalName")]
-        user_principal_name: Option<String>,
-    }
-    let me: Me = client
-        .get(GRAPH_ME)
-        .bearer_auth(access_token)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
-    me.mail
-        .or(me.user_principal_name)
-        .ok_or_else(|| anyhow!("could not determine account email"))
 }
 
 async fn gmail_email(client: &reqwest::Client, access_token: &str) -> anyhow::Result<String> {
