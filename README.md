@@ -85,3 +85,6 @@ restart the client.
 - OAuth tokens are stored only in the macOS Keychain, never on disk in plaintext
   and never transmitted off-device.
 - Minimal scopes (read-only by default). Per-account permissions.
+
+Full [privacy policy](https://appcamp.com/privacy/) · technical
+[data flow & security](./docs/security.md).
