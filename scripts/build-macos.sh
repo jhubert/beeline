@@ -22,6 +22,18 @@ TRIPLE="$(rustc -Vv | sed -n 's/host: //p')"
 export APPLE_SIGNING_IDENTITY="${APPLE_SIGNING_IDENTITY:-Developer ID Application: Jeremy Hubert (6ULL56D9UV)}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-LMR-notary}"
 
+# Bake OAuth client config into the release binaries (option_env! in core), so
+# the shipped app works with no local config.toml. Pull from config.sh if present.
+[[ -f "$ROOT/config.sh" ]] && source "$ROOT/config.sh"
+for v in MAILAGENT_GOOGLE_CLIENT_ID MAILAGENT_GOOGLE_CLIENT_SECRET MAILAGENT_MICROSOFT_CLIENT_ID; do
+  if [[ -z "${!v:-}" ]]; then
+    echo "✗ $v is not set — required to embed OAuth config into the build." >&2
+    echo "  Source your config.sh or export the three MAILAGENT_* vars, then re-run." >&2
+    exit 1
+  fi
+  export "${v?}"
+done
+
 echo "==> Building mailagent helper (release)"
 cargo build --release --manifest-path "$ROOT/Cargo.toml" -p mailagent-cli
 

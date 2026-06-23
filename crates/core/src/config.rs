@@ -34,26 +34,48 @@ struct OAuthFile {
     microsoft_client_id: Option<String>,
 }
 
+// Compile-time fallbacks the release build bakes in (see scripts/build-macos.sh),
+// so a distributed app works with no local config. Empty in a plain dev build —
+// option_env! is None unless the var was set at compile time — so dev keeps
+// using runtime env / config.toml exactly as before. Client IDs are public; the
+// Google desktop "secret" is non-confidential for installed apps, and injecting
+// at build time keeps it out of the (public) repo.
+const EMBEDDED_GOOGLE_CLIENT_ID: Option<&str> = option_env!("MAILAGENT_GOOGLE_CLIENT_ID");
+const EMBEDDED_GOOGLE_CLIENT_SECRET: Option<&str> = option_env!("MAILAGENT_GOOGLE_CLIENT_SECRET");
+const EMBEDDED_MICROSOFT_CLIENT_ID: Option<&str> = option_env!("MAILAGENT_MICROSOFT_CLIENT_ID");
+
 impl OAuthConfig {
     pub fn load() -> anyhow::Result<Self> {
         let file = read_file().unwrap_or_default();
 
-        // env wins; fall back to the file value.
-        let pick = |env_key: &str, file_val: Option<String>| -> Option<String> {
+        // Runtime env wins (dev override), then ~/.mailagent/config.toml, then
+        // the value baked in at build time.
+        let pick = |env_key: &str, file_val: Option<String>, embedded: Option<&str>| -> Option<String> {
             std::env::var(env_key)
                 .ok()
                 .filter(|s| !s.is_empty())
                 .or(file_val)
+                .or_else(|| embedded.map(str::to_string).filter(|s| !s.is_empty()))
         };
 
-        let google_client_id = pick("MAILAGENT_GOOGLE_CLIENT_ID", file.oauth.google_client_id)
-            .ok_or_else(|| missing("Google client id", "MAILAGENT_GOOGLE_CLIENT_ID"))?;
-        let google_client_secret =
-            pick("MAILAGENT_GOOGLE_CLIENT_SECRET", file.oauth.google_client_secret)
-                .ok_or_else(|| missing("Google client secret", "MAILAGENT_GOOGLE_CLIENT_SECRET"))?;
-        let microsoft_client_id =
-            pick("MAILAGENT_MICROSOFT_CLIENT_ID", file.oauth.microsoft_client_id)
-                .unwrap_or_default();
+        let google_client_id = pick(
+            "MAILAGENT_GOOGLE_CLIENT_ID",
+            file.oauth.google_client_id,
+            EMBEDDED_GOOGLE_CLIENT_ID,
+        )
+        .ok_or_else(|| missing("Google client id", "MAILAGENT_GOOGLE_CLIENT_ID"))?;
+        let google_client_secret = pick(
+            "MAILAGENT_GOOGLE_CLIENT_SECRET",
+            file.oauth.google_client_secret,
+            EMBEDDED_GOOGLE_CLIENT_SECRET,
+        )
+        .ok_or_else(|| missing("Google client secret", "MAILAGENT_GOOGLE_CLIENT_SECRET"))?;
+        let microsoft_client_id = pick(
+            "MAILAGENT_MICROSOFT_CLIENT_ID",
+            file.oauth.microsoft_client_id,
+            EMBEDDED_MICROSOFT_CLIENT_ID,
+        )
+        .unwrap_or_default();
 
         Ok(Self {
             google_client_id,

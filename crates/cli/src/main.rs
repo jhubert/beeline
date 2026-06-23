@@ -83,9 +83,15 @@ async fn main() -> anyhow::Result<()> {
             println!("  [ok]   binary runs");
             println!("  [ok]   sqlite store at {}", db_path.display());
             println!("  [ok]   {} account(s) registered", agent.list_accounts()?.len());
-            println!("  [todo] OAuth client registrations (Entra + Google) — using stub providers");
-            println!("  [todo] real provider HTTP (Gmail / Graph)");
-            println!("  [todo] control-API daemon (mailagent serve)");
+            match mailagent_core::config::OAuthConfig::load() {
+                Ok(c) => println!(
+                    "  [ok]   OAuth client config present (gmail{})",
+                    if c.microsoft_client_id.is_empty() { "" } else { " + microsoft" }
+                ),
+                Err(_) => println!(
+                    "  [todo] OAuth client config missing — embed at build, or add ~/.mailagent/config.toml"
+                ),
+            }
         }
         Command::Accounts => {
             for a in agent.list_accounts()? {

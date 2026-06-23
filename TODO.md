@@ -11,15 +11,12 @@ test users).
 
 ## 🚧 Blockers — a real user can't succeed without these
 
-- [ ] **Ship the OAuth client IDs inside the app.** Today they're read only from
-  `~/.mailagent/config.toml` or env vars — a fresh user has neither, so
-  `add-account` and MCP search fail with "missing Google client id." Embed the
-  client IDs (and Google's installed-app "client secret", which is *not*
-  confidential for desktop clients) as compile-time fallbacks in
-  `crates/core/src/config.rs`, still overridable by env/file for dev.
-  - Note: the Beeline repo is on GitHub. Client IDs are public; if you'd rather
-    not commit even the non-confidential Google desktop secret, inject it at
-    build time via an env var the build reads, rather than hardcoding it.
+- [x] **Ship the OAuth client IDs inside the app.** Done: `config.rs` now falls
+  back to compile-time `option_env!` values (resolution: runtime env → config.toml
+  → embedded). `scripts/build-macos.sh` sources `config.sh` and bakes the three
+  `MAILAGENT_*` vars into the release build; `crates/core/build.rs` keeps them
+  fresh. Secrets stay out of the public repo (injected at build, not committed);
+  `mailagent doctor` reports whether config is present. Verified in a clean env.
 
 - [ ] **Test the signed DMG on a clean Mac / second macOS user account.** The dev
   machine has `config.toml`, dev Keychain entries, and test-user access a real
