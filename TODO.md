@@ -31,13 +31,11 @@ test users).
   - Heads-up: Testing-mode refresh tokens expire ~weekly, so users will hit
     "needs reconnect" every few days. Reconnect is built — just set expectations.
 
-- [ ] **Decide & build the non-technical "connect your AI" path.** We removed the
-  GUI's Connect-to-Claude button (neutral positioning), but a non-technical user
-  can't hand-edit Claude's config JSON or run the CLI `install-mcp`. Pick one:
-  - (a) an optional, neutrally-framed "Set up with an AI assistant" button in the
-    app that writes the client config (user-initiated, not marketed), or
-  - (b) a friendly step-by-step help page they can follow.
-  Without this, users can install Beeline but can't actually use it.
+- [x] **AI-connection path — decided: no in-app integration for now.** Beeline
+  stays a neutral CLI + MCP server; connecting an AI is the user's choice:
+  Claude Code can run the `mailagent` CLI directly, and Claude Desktop / other
+  MCP clients use `mailagent install-mcp <client>`. Leans the alpha slightly more
+  technical, which is fine for friends-and-family. (See the docs task below.)
 
 ---
 
@@ -54,8 +52,9 @@ test users).
   is ready; surface read/draft/etc. per account.
 - [ ] **Friendlier GUI errors** for `admin_approval_required`,
   `provider_unavailable`, and rate limiting.
-- [ ] **A short "Getting started" for users** (install → add account → connect AI),
-  tied to the AI-connection decision above.
+- [ ] **"Using Beeline with Claude" guide** — teach the AI to drive the CLI
+  (command reference + example prompts), plus the one-line `install-mcp` step for
+  Claude Desktop. This is the chosen alternative to in-app AI integration.
 
 ---
 
