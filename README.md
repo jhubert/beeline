@@ -11,8 +11,8 @@ in the macOS Keychain; account metadata in a local SQLite store.
 
 ## What it is — and isn't
 
-- **It is** a local capability layer for your mailboxes: search, read, and
-  (soon) draft across Gmail and Outlook/Microsoft 365 behind one interface.
+- **It is** a local capability layer for your mailboxes: search, read, and draft
+  across Gmail and Outlook/Microsoft 365 behind one interface.
 - **It isn't** a hosted service, a mail client, or an AI product. Beeline does
   not bundle, endorse, or route your mail to any AI on its own. If *you* connect
   an AI assistant, *you* are directing your data to that service — Beeline is
@@ -84,7 +84,8 @@ restart the client.
   your Mac and held only in memory to answer a request.
 - OAuth tokens are stored only in the macOS Keychain, never on disk in plaintext
   and never transmitted off-device.
-- Minimal scopes (read-only by default). Per-account permissions.
+- Reads mail and creates drafts; never sends, deletes, or moves anything — you
+  review and send drafts yourself.
 
 Full [privacy policy](https://appcamp.com/privacy/) · technical
 [data flow & security](./docs/security.md).

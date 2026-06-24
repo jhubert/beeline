@@ -12,9 +12,8 @@ pub fn can_read(account: &ConnectedAccount) -> bool {
     account.enabled && account.permissions.read
 }
 
-pub fn can_create_draft(account: &ConnectedAccount) -> bool {
-    account.enabled && account.permissions.modify
-}
+// Drafting is intentionally ungated — a draft is non-destructive. The
+// permission tiers below exist for the actions that are: send / archive / move.
 
 /// Actions that always require explicit user confirmation (SPEC.md §12.2),
 /// regardless of granted permissions. Wired into tool dispatch in Phase 3.

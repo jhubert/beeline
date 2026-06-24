@@ -11,7 +11,9 @@ It describes, concretely, what data Beeline touches and where it goes.
   only on the user's device. This keeps Beeline on the exempt side of Google's
   restricted-scope security-assessment trigger (which applies to apps that store
   or transmit restricted-scope data on their own servers).
-- **Minimal scopes, read-only by default.**
+- **Read + draft only.** Beeline reads mail and creates drafts; it never sends,
+  deletes, archives, or moves anything. Those actions are not exposed — the user
+  reviews and sends drafts themselves from their mail app.
 - **Transmits nothing off-device.** The only way mail leaves the Mac is through a
   client the *user* connects (see "User-directed transfer").
 
@@ -40,11 +42,13 @@ never an intermediary server.
 
 | Provider | Scopes | Flow |
 |----------|--------|------|
-| Google (Gmail) | `gmail.readonly` (+ offline access for refresh) | Auth-code + PKCE, loopback redirect; desktop client |
-| Microsoft (Graph) | `openid profile offline_access Mail.Read` | Auth-code + PKCE, loopback redirect; public client, `common` authority |
+| Google (Gmail) | `gmail.readonly` + `gmail.compose` (+ offline access) | Auth-code + PKCE, loopback redirect; desktop client |
+| Microsoft (Graph) | `openid profile offline_access Mail.ReadWrite` | Auth-code + PKCE, loopback redirect; public client, `common` authority |
 
-No write/send/delete scopes are requested by default. Draft/send capabilities, when
-added, are opt-in per account and gated by the confirmation flow.
+`gmail.compose` / `Mail.ReadWrite` are the minimal scopes that allow draft
+creation; there is no draft-only scope. **No send tool is exposed** — Beeline
+creates drafts and never sends. Send / archive / move, if added later, are gated
+by the confirmation flow.
 
 ## User-directed transfer
 

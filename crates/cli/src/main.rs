@@ -50,13 +50,6 @@ enum Command {
     Read { local_message_id: String },
     /// Re-authorize an account whose token expired or was revoked.
     Reconnect { account: String },
-    /// Enable/disable an account capability (currently: draft creation).
-    Permissions {
-        account: String,
-        /// Allow creating drafts for this account (true/false).
-        #[arg(long)]
-        draft: Option<bool>,
-    },
     /// Create a draft reply to a message (by localMessageId from search).
     DraftReply {
         local_message_id: String,
@@ -169,21 +162,6 @@ async fn main() -> anyhow::Result<()> {
         Command::Reconnect { account } => {
             let a = agent.reconnect_account(&account).await?;
             println!("Reconnected {} ({}).", a.alias, a.email);
-        }
-        Command::Permissions { account, draft } => {
-            let mut acct = agent
-                .list_accounts()?
-                .into_iter()
-                .find(|a| a.alias == account || a.id == account)
-                .ok_or_else(|| anyhow::anyhow!("no account matching '{account}'"))?;
-            if let Some(d) = draft {
-                acct.permissions.modify = d;
-            }
-            let updated = agent.set_account_permissions(&acct.id, acct.permissions)?;
-            println!(
-                "{}: read={} draft={}",
-                updated.alias, updated.permissions.read, updated.permissions.modify
-            );
         }
         Command::DraftReply {
             local_message_id,

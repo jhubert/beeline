@@ -446,12 +446,9 @@ impl MailAgent {
         F: FnOnce(Arc<dyn MailProvider>, String) -> Fut,
         Fut: std::future::Future<Output = Result<mailagent_providers::RawDraft, mailagent_providers::ProviderError>>,
     {
-        if !policy::can_create_draft(account) {
-            anyhow::bail!(
-                "draft permission not enabled for account {} (enable it first)",
-                account.alias
-            );
-        }
+        // No gate on drafting: a draft is non-destructive (it just sits in the
+        // user's Drafts for review). The gates that matter are on send / archive
+        // / delete — which Beeline does not expose.
         let provider = self
             .providers
             .get(&provider_kind)
