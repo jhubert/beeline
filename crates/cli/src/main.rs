@@ -1,6 +1,6 @@
-//! `mailagent` — the distributable binary (SPEC.md §6.3). This single binary is
-//! the product: it is the CLI, the MCP server (`mailagent mcp`), and will host
-//! the control-API daemon (`mailagent serve`) that the optional GUI drives.
+//! `beeline` — the distributable binary (SPEC.md §6.3). This single binary is
+//! the product: it is the CLI, the MCP server (`beeline mcp`), and will host
+//! the control-API daemon (`beeline serve`) that the optional GUI drives.
 
 use std::sync::Arc;
 
@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 #[derive(Parser)]
-#[command(name = "mailagent", version, about = "Local AI mail agent")]
+#[command(name = "beeline", version, about = "Local AI mail agent")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -101,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Doctor => {
-            println!("mailagent doctor");
+            println!("beeline doctor");
             println!("  [ok]   binary runs");
             println!("  [ok]   sqlite store at {}", db_path.display());
             println!("  [ok]   {} account(s) registered", agent.list_accounts()?.len());
@@ -111,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
                     if c.microsoft_client_id.is_empty() { "" } else { " + microsoft" }
                 ),
                 Err(_) => println!(
-                    "  [todo] OAuth client config missing — embed at build, or add ~/.mailagent/config.toml"
+                    "  [todo] OAuth client config missing — embed at build, or add ~/.beeline/config.toml"
                 ),
             }
         }
@@ -228,7 +228,7 @@ async fn ctl(method: &str, params: Option<&str>) -> anyhow::Result<()> {
         .await
         .with_context(|| {
             format!(
-                "connecting to {} — is `mailagent serve` running?",
+                "connecting to {} — is `beeline serve` running?",
                 socket.display()
             )
         })?;

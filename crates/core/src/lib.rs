@@ -532,10 +532,10 @@ fn default_providers() -> HashMap<Provider, Arc<dyn MailProvider>> {
     providers
 }
 
-/// Default on-disk location for the SQLite store: `~/.mailagent/mailagent.sqlite`.
+/// Default on-disk location for the SQLite store: `~/.beeline/beeline.sqlite`.
 /// Phase 2 will move this to the macOS Application Support directory.
 pub fn default_db_path() -> anyhow::Result<PathBuf> {
-    Ok(data_dir()?.join("mailagent.sqlite"))
+    Ok(data_dir()?.join("beeline.sqlite"))
 }
 
 /// Unix-domain socket for the control API (SPEC.md §6.2). Lives under the
@@ -547,13 +547,13 @@ pub fn default_socket_path() -> anyhow::Result<PathBuf> {
 
 fn data_dir() -> anyhow::Result<PathBuf> {
     let home = std::env::var("HOME").map_err(|_| anyhow::anyhow!("HOME is not set"))?;
-    let dir = Path::new(&home).join(".mailagent");
+    let dir = Path::new(&home).join(".beeline");
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }
 
 /// Register Beeline's MCP server in an AI client's config (SPEC.md §16.4).
-/// `mcp_binary` is the path to the `mailagent` binary the client should spawn
+/// `mcp_binary` is the path to the `beeline` binary the client should spawn
 /// with `mcp` — the CLI passes its own path; the GUI passes the helper binary
 /// bundled in the .app. Merges into any existing config (backed up first) so
 /// other MCP servers and settings are preserved. Returns the config path.

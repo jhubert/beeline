@@ -21,7 +21,7 @@ It describes, concretely, what data Beeline touches and where it goes.
 
 ```
 your MCP client ──(MCP, stdio)──┐
-(AI assistant, user-connected)  ├──▶  mailagent  ──▶  Gmail API / Microsoft Graph
+(AI assistant, user-connected)  ├──▶  beeline    ──▶  Gmail API / Microsoft Graph
 CLI / desktop app ──────────────┘      │              (direct, over TLS)
                                         ▼
                               Keychain (tokens) + SQLite (metadata), local only
@@ -35,7 +35,7 @@ never an intermediary server.
 | Data | Location | Notes |
 |------|----------|-------|
 | OAuth refresh/access tokens | macOS Keychain (`com.appcamp.beelinemailagent`) | Never on disk in plaintext; never transmitted off-device |
-| Account records, local-id map, audit log, pending confirmations | SQLite at `~/.mailagent/mailagent.sqlite` | No message bodies; no tokens |
+| Account records, local-id map, audit log, pending confirmations | SQLite at `~/.beeline/beeline.sqlite` | No message bodies; no tokens |
 | Message bodies | In memory, transiently | Fetched on demand to answer a request; not cached to disk by default |
 
 ## OAuth scopes
@@ -52,7 +52,7 @@ by the confirmation flow.
 
 ## User-directed transfer
 
-Beeline exposes a **local** MCP server (`mailagent mcp`) over stdio. If the user
+Beeline exposes a **local** MCP server (`beeline mcp`) over stdio. If the user
 points an AI assistant at it, then when that assistant reads a message, the content
 is sent to the assistant's provider (e.g. Anthropic, OpenAI) so it can act on the
 request. This transfer is initiated and controlled by the user, governed by that
@@ -68,5 +68,5 @@ tokens. Diagnostic output redacts tokens and contents.
 ## Revocation & deletion
 
 - Disconnecting an account in Beeline deletes its Keychain token and local records.
-- Removing `~/.mailagent` deletes all locally stored data.
+- Removing `~/.beeline` deletes all locally stored data.
 - Access can be revoked independently from the user's Google or Microsoft account.

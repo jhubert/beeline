@@ -5,7 +5,7 @@ Beeline gives you local, programmatic access to your own email. It runs
 anywhere**. Connect it to your own tools (an AI assistant via MCP, or scripts
 via the CLI); what you do with your mail is up to you.
 
-A single `mailagent` binary is the product: a CLI, a local [MCP](https://modelcontextprotocol.io)
+A single `beeline` binary is the product: a CLI, a local [MCP](https://modelcontextprotocol.io)
 server, and (optionally) a small desktop app for managing accounts. Tokens live
 in the macOS Keychain; account metadata in a local SQLite store.
 
@@ -22,7 +22,7 @@ in the macOS Keychain; account metadata in a local SQLite store.
 
 ```
 your MCP client ──(MCP, stdio)──┐
-(AI assistant, you connect it)  ├──▶  mailagent  ──▶ SQLite + Keychain (local)
+(AI assistant, you connect it)  ├──▶  beeline    ──▶ SQLite + Keychain (local)
 CLI / desktop app ──────────────┘     core: accounts / auth / policy /
                                        storage / audit / local-ids
                                               │
@@ -39,21 +39,21 @@ CLI / desktop app ──────────────┘     core: accoun
 | `crates/core`      | `MailAgent` facade, OAuth (PKCE), policy, local-id map      |
 | `crates/mcp`       | MCP server: JSON-RPC 2.0 over stdio                        |
 | `crates/control`   | Control API over a unix-domain socket (human-facing)       |
-| `crates/cli`       | `mailagent` binary                                         |
+| `crates/cli`       | `beeline` binary                                         |
 | `apps/desktop`     | Tauri app for account onboarding/management                |
 
 ## Quick start (CLI)
 
 ```sh
 cargo build
-cp config.example.toml ~/.mailagent/config.toml   # add your OAuth client ids
-./target/debug/mailagent add-account --provider gmail
-./target/debug/mailagent add-account --provider microsoft
-./target/debug/mailagent search --account all "from:bruce"
-./target/debug/mailagent read <localMessageId>
+cp config.example.toml ~/.beeline/config.toml   # add your OAuth client ids
+./target/debug/beeline add-account --provider gmail
+./target/debug/beeline add-account --provider microsoft
+./target/debug/beeline search --account all "from:bruce"
+./target/debug/beeline read <localMessageId>
 ```
 
-OAuth client config is read from `~/.mailagent/config.toml` (or env vars). See
+OAuth client config is read from `~/.beeline/config.toml` (or env vars). See
 `config.example.toml`.
 
 ## Connecting a client
@@ -63,12 +63,12 @@ Beeline exposes its tools over MCP on stdio. Point any MCP client at the binary:
 ```json
 {
   "mcpServers": {
-    "beeline": { "command": "/path/to/mailagent", "args": ["mcp"] }
+    "beeline": { "command": "/path/to/beeline", "args": ["mcp"] }
   }
 }
 ```
 
-For Claude Desktop, `mailagent install-mcp claude` will write that entry for you
+For Claude Desktop, `beeline install-mcp claude` will write that entry for you
 (it only edits the client's local config — it does not move any mail). Then
 restart the client.
 

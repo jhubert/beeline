@@ -1,7 +1,7 @@
 //! OAuth client configuration (SPEC.md §11.3).
 //!
 //! Resolution order per value: environment variable first (handy for
-//! `source config.sh` during development), then `~/.mailagent/config.toml`.
+//! `source config.sh` during development), then `~/.beeline/config.toml`.
 //! The file matters because GUI- and launchd-spawned processes (e.g. the
 //! `mcp` server Claude Desktop launches) do NOT inherit your shell env — they
 //! can only see the file.
@@ -48,7 +48,7 @@ impl OAuthConfig {
     pub fn load() -> anyhow::Result<Self> {
         let file = read_file().unwrap_or_default();
 
-        // Runtime env wins (dev override), then ~/.mailagent/config.toml, then
+        // Runtime env wins (dev override), then ~/.beeline/config.toml, then
         // the value baked in at build time.
         let pick = |env_key: &str, file_val: Option<String>, embedded: Option<&str>| -> Option<String> {
             std::env::var(env_key)
@@ -84,10 +84,10 @@ impl OAuthConfig {
         })
     }
 
-    /// `~/.mailagent/config.toml`.
+    /// `~/.beeline/config.toml`.
     pub fn config_path() -> Option<PathBuf> {
         let home = std::env::var("HOME").ok()?;
-        Some(PathBuf::from(home).join(".mailagent").join("config.toml"))
+        Some(PathBuf::from(home).join(".beeline").join("config.toml"))
     }
 }
 
@@ -99,6 +99,6 @@ fn read_file() -> Option<FileConfig> {
 
 fn missing(what: &str, env_key: &str) -> anyhow::Error {
     anyhow::anyhow!(
-        "missing {what} — set {env_key} or add it to ~/.mailagent/config.toml (see config.example.toml)"
+        "missing {what} — set {env_key} or add it to ~/.beeline/config.toml (see config.example.toml)"
     )
 }

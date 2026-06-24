@@ -180,7 +180,7 @@ pub async fn google_access_token(
 pub async fn microsoft_authorize(config: &OAuthConfig) -> anyhow::Result<ConnectedIdentity> {
     if config.microsoft_client_id.is_empty() {
         return Err(anyhow!(
-            "missing Microsoft client id — set MAILAGENT_MICROSOFT_CLIENT_ID or ~/.mailagent/config.toml"
+            "missing Microsoft client id — set MAILAGENT_MICROSOFT_CLIENT_ID or ~/.beeline/config.toml"
         ));
     }
 

@@ -1,12 +1,12 @@
 # OAuth client configuration, read by ALL processes — including the MCP server
 # that Claude Desktop / launchd spawn, which don't inherit your shell env.
 #
-#   cp config.example.toml ~/.mailagent/config.toml
+#   cp config.example.toml ~/.beeline/config.toml
 #   # then fill in the values from your Google Cloud + Entra registrations
 #
 # Environment variables (config.sh) still override these when set, which is
 # convenient during development. Keep your real config.toml private (it lives
-# under ~/.mailagent, outside the repo).
+# under ~/.beeline, outside the repo).
 
 [oauth]
 google_client_id = "xxxxxxxx.apps.googleusercontent.com"

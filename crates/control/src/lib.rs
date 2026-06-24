@@ -6,7 +6,7 @@
 //! socket is bound 0600 under the user's data dir, so trust is scoped by
 //! filesystem permissions and it is never reachable over the network.
 //!
-//! Run by `mailagent serve`, kept alive by a launchd login-item (daemon model
+//! Run by `beeline serve`, kept alive by a launchd login-item (daemon model
 //! B), so the binary is the persistent thing and the GUI is a transient client.
 
 use std::os::unix::fs::PermissionsExt;

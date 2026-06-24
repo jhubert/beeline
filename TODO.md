@@ -22,7 +22,7 @@ go through Google's verification *review*.
   `gmail.compose`, `Mail.ReadWrite`.
 
 - [x] **AI-connection path — decided.** No in-app integration; Claude Code runs
-  the CLI directly, Claude Desktop uses `mailagent install-mcp`.
+  the CLI directly, Claude Desktop uses `beeline install-mcp`.
 
 - [ ] **Clean-machine test of the signed DMG.** Install the actual `.dmg` as a
   fresh macOS user (no `config.toml`, no dev Keychain), then add a Gmail + an
@@ -84,7 +84,7 @@ go through Google's verification *review*.
 
 ## ✅ Done
 
-- Rust workspace; single `mailagent` binary = CLI + MCP server + control daemon
+- Rust workspace; single `beeline` binary = CLI + MCP server + control daemon
 - Real Gmail + Microsoft Graph: search, read, **draft + draft-reply** (threaded);
   normalized; OAuth + PKCE; tokens in macOS Keychain; SQLite; local-id indirection
 - OAuth client config embedded in release builds (works with no local config)

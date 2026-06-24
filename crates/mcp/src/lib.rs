@@ -61,7 +61,7 @@ async fn dispatch(agent: &MailAgent, method: &str, params: Option<&Value>) -> an
         "initialize" => Ok(json!({
             "protocolVersion": PROTOCOL_VERSION,
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "mailagent", "version": env!("CARGO_PKG_VERSION") }
+            "serverInfo": { "name": "beeline", "version": env!("CARGO_PKG_VERSION") }
         })),
         "tools/list" => Ok(json!({ "tools": tool_schemas() })),
         "tools/call" => call_tool(agent, params).await,

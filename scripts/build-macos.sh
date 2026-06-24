@@ -34,13 +34,13 @@ for v in MAILAGENT_GOOGLE_CLIENT_ID MAILAGENT_GOOGLE_CLIENT_SECRET MAILAGENT_MIC
   export "${v?}"
 done
 
-echo "==> Building mailagent helper (release)"
+echo "==> Building beeline helper (release)"
 cargo build --release --manifest-path "$ROOT/Cargo.toml" -p mailagent-cli
 
-echo "==> Staging helper as a Tauri sidecar: binaries/mailagent-$TRIPLE"
+echo "==> Staging helper as a Tauri sidecar: binaries/beeline-$TRIPLE"
 mkdir -p "$ROOT/apps/desktop/src-tauri/binaries"
-cp "$ROOT/target/release/mailagent" \
-   "$ROOT/apps/desktop/src-tauri/binaries/mailagent-$TRIPLE"
+cp "$ROOT/target/release/beeline" \
+   "$ROOT/apps/desktop/src-tauri/binaries/beeline-$TRIPLE"
 
 cd "$ROOT/apps/desktop"
 
@@ -56,7 +56,7 @@ echo "==> tauri build (sign + dmg)"
 # externalBin is injected only for the release bundle (so the helper is shipped
 # beside the app); it's omitted from the base config so `tauri dev` doesn't
 # require the staged sidecar. We let Tauri SIGN only — notarization is below.
-pnpm tauri build --config '{"bundle":{"externalBin":["binaries/mailagent"]}}'
+pnpm tauri build --config '{"bundle":{"externalBin":["binaries/beeline"]}}'
 
 APP="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
 DMG="$(find src-tauri/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' | head -1)"

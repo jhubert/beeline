@@ -15,7 +15,7 @@ notarize.env
 # local dev data — never commit tokens / caches / db
 *.sqlite
 *.sqlite-*
-.mailagent/
+.beeline/
 
 # local OAuth client config — never commit (fill from config.example.sh)
 config.sh

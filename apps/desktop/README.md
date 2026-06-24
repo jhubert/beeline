@@ -11,14 +11,14 @@ From `apps/desktop/`:
 ```sh
 pnpm install                 # installs the Tauri CLI (@tauri-apps/cli)
 
-# Point the GUI at the dev mailagent binary (used for "Connect to Claude Desktop").
+# Point the GUI at the dev beeline binary (used for "Connect to Claude Desktop").
 # Build it first from the repo root: cargo build
-export BEELINE_MCP_BIN="$(cd ../.. && pwd)/target/debug/mailagent"
+export BEELINE_MCP_BIN="$(cd ../.. && pwd)/target/debug/beeline"
 
 pnpm tauri dev
 ```
 
-OAuth client creds are read from `~/.mailagent/config.toml` (or env), the same
+OAuth client creds are read from `~/.beeline/config.toml` (or env), the same
 as the CLI. Accounts, tokens (Keychain), and the SQLite store are shared with
 the CLI/MCP server, so anything added here shows up there and vice versa.
 

@@ -2,7 +2,7 @@
 #
 #   1. cp config.example.sh config.sh   (config.sh is gitignored)
 #   2. fill in the values from your Google Cloud + Entra registrations
-#   3. source config.sh    (before running `mailagent add-account` / `serve` / `mcp`)
+#   3. source config.sh    (before running `beeline add-account` / `serve` / `mcp`)
 #
 # Client IDs are public; the Google desktop "client secret" is distributed with
 # installed apps and is NOT truly confidential — but we keep all of it out of
