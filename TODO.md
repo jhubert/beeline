@@ -47,8 +47,9 @@ go through Google's verification *review*.
 
 ## ⚠️ Should-do for a solid first impression
 
-- [ ] **Cache access tokens in memory (with expiry).** Every search/read/draft
-  currently does a token-refresh round-trip — wasteful and risks rate limits.
+- [x] **Cache access tokens in memory (with expiry).** Done: tokens cached per
+  account until ~60s before expiry; invalidated on reconnect / removal /
+  needs_reconnect. No more refresh on every call.
 - [ ] **Cross-account query normalization (SPEC §14.2).** `newer_than:7d` is Gmail
   syntax; Graph treats it as plain text. Translate per provider for consistent
   cross-account results.

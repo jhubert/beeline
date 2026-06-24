@@ -54,6 +54,12 @@ impl std::fmt::Display for TokenRefreshError {
 
 impl std::error::Error for TokenRefreshError {}
 
+/// A freshly refreshed access token plus how long (seconds) it is valid.
+pub struct AccessToken {
+    pub token: String,
+    pub expires_in: u64,
+}
+
 #[derive(Deserialize)]
 struct TokenResponse {
     access_token: String,
@@ -61,18 +67,23 @@ struct TokenResponse {
     refresh_token: Option<String>,
     #[serde(default)]
     id_token: Option<String>,
+    #[serde(default)]
+    expires_in: u64,
 }
 
 /// Interpret a token-endpoint response for a refresh request. A 400/401 means
 /// the refresh token was rejected → the account needs reconnecting.
-async fn refresh_response(response: reqwest::Response) -> Result<String, TokenRefreshError> {
+async fn refresh_response(response: reqwest::Response) -> Result<AccessToken, TokenRefreshError> {
     let status = response.status();
     if status.is_success() {
         let token: TokenResponse = response.json().await.map_err(|e| TokenRefreshError {
             needs_reconnect: false,
             detail: e.to_string(),
         })?;
-        return Ok(token.access_token);
+        return Ok(AccessToken {
+            token: token.access_token,
+            expires_in: token.expires_in,
+        });
     }
     let body = response.text().await.unwrap_or_default();
     Err(TokenRefreshError {
@@ -149,7 +160,7 @@ pub async fn google_authorize(config: &OAuthConfig) -> anyhow::Result<ConnectedI
 pub async fn google_access_token(
     config: &OAuthConfig,
     refresh_token: &str,
-) -> Result<String, TokenRefreshError> {
+) -> Result<AccessToken, TokenRefreshError> {
     let response = reqwest::Client::new()
         .post(GOOGLE_TOKEN)
         .form(&[
@@ -250,7 +261,7 @@ fn email_from_id_token(id_token: &str) -> Option<String> {
 pub async fn microsoft_access_token(
     config: &OAuthConfig,
     refresh_token: &str,
-) -> Result<String, TokenRefreshError> {
+) -> Result<AccessToken, TokenRefreshError> {
     let response = reqwest::Client::new()
         .post(MS_TOKEN)
         .form(&[

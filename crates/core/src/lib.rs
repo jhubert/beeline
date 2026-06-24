@@ -9,7 +9,8 @@ pub mod policy;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use mailagent_providers::{gmail::GmailProvider, microsoft::MicrosoftProvider, MailProvider};
 use mailagent_storage::{
@@ -39,12 +40,20 @@ pub struct SearchResults {
     pub partial_failures: Vec<PartialFailure>,
 }
 
+struct CachedToken {
+    token: String,
+    expires_at: Instant,
+}
+
 pub struct MailAgent {
     db: Db,
     providers: HashMap<Provider, Arc<dyn MailProvider>>,
     /// OAuth refresh tokens live here, keyed by account id — never in the DB
     /// (SPEC.md §10.1, §19).
     secrets: Box<dyn SecretStore>,
+    /// In-memory access-token cache, keyed by account id, so we don't refresh on
+    /// every request. Cleared on reconnect (scope may change) and removal.
+    token_cache: Mutex<HashMap<String, CachedToken>>,
 }
 
 impl MailAgent {
@@ -55,6 +64,7 @@ impl MailAgent {
             db,
             providers: default_providers(),
             secrets: Box::new(KeyringStore::new(KEYRING_SERVICE)),
+            token_cache: Mutex::new(HashMap::new()),
         })
     }
 
@@ -65,6 +75,7 @@ impl MailAgent {
             db,
             providers: default_providers(),
             secrets: Box::new(MemorySecretStore::default()),
+            token_cache: Mutex::new(HashMap::new()),
         })
     }
 
@@ -140,6 +151,15 @@ impl MailAgent {
         if account.provider == Provider::Imap {
             return Ok(String::new());
         }
+
+        // Serve a still-valid cached token without a refresh round-trip. (Lock
+        // is dropped before any await — never held across the network call.)
+        if let Some(cached) = self.token_cache.lock().unwrap().get(&account.id) {
+            if Instant::now() < cached.expires_at {
+                return Ok(cached.token.clone());
+            }
+        }
+
         let config = OAuthConfig::load()?;
         let refresh = match self.secrets.get(&account.id)? {
             Some(token) => token,
@@ -159,8 +179,20 @@ impl MailAgent {
         };
 
         match result {
-            Ok(token) => Ok(token),
+            Ok(access) => {
+                // Cache until shortly before expiry (60s buffer; floor 30s).
+                let ttl = Duration::from_secs(access.expires_in.saturating_sub(60).max(30));
+                self.token_cache.lock().unwrap().insert(
+                    account.id.clone(),
+                    CachedToken {
+                        token: access.token.clone(),
+                        expires_at: Instant::now() + ttl,
+                    },
+                );
+                Ok(access.token)
+            }
             Err(e) if e.needs_reconnect => {
+                self.token_cache.lock().unwrap().remove(&account.id);
                 let _ = self
                     .db
                     .set_account_status(&account.id, AccountStatus::NeedsReconnect);
@@ -197,6 +229,8 @@ impl MailAgent {
         }
 
         self.secrets.set(&account.id, &identity.refresh_token)?;
+        // Drop any cached access token — its scope may now differ.
+        self.token_cache.lock().unwrap().remove(&account.id);
         self.db
             .set_account_status(&account.id, AccountStatus::Connected)?;
         self.db.record_audit(
@@ -222,6 +256,7 @@ impl MailAgent {
             .ok_or_else(|| anyhow::anyhow!("no account matching '{alias_or_id}'"))?;
 
         let _ = self.secrets.delete(&account.id); // best-effort; demo rows have none
+        self.token_cache.lock().unwrap().remove(&account.id);
         self.db.delete_account(&account.id)?;
         self.db.record_audit(
             Some(&account.alias),
