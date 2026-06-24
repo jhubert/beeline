@@ -3,13 +3,13 @@
 
 use async_trait::async_trait;
 use mailagent_types::{
-    AttachmentSummary, ConnectedAccount, EmailAddress, MailSearchQuery, MessageDetail,
+    AttachmentSummary, ConnectedAccount, DraftInput, EmailAddress, MailSearchQuery, MessageDetail,
     MessageSummary, Provider,
 };
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::{MailProvider, ProviderError, RawHit};
+use crate::{MailProvider, ProviderError, RawDraft, RawHit};
 
 const GRAPH: &str = "https://graph.microsoft.com/v1.0/me";
 const SELECT: &str =
@@ -92,6 +92,107 @@ impl MailProvider for MicrosoftProvider {
             attachments,
         })
     }
+
+    async fn create_draft(
+        &self,
+        _account: &ConnectedAccount,
+        access_token: &str,
+        input: &DraftInput,
+    ) -> Result<RawDraft, ProviderError> {
+        // POST /me/messages creates a draft directly.
+        let request = DraftRequest {
+            subject: &input.subject,
+            body: GraphBody {
+                content_type: "Text",
+                content: &input.body_text,
+            },
+            to_recipients: input.to.iter().map(recipient).collect(),
+            cc_recipients: input.cc.iter().map(recipient).collect(),
+            bcc_recipients: input.bcc.iter().map(recipient).collect(),
+        };
+        let created: DraftResponse =
+            post_json(&self.http, &format!("{GRAPH}/messages"), access_token, &request).await?;
+        Ok(RawDraft {
+            provider_draft_id: created.id,
+            subject: if created.subject.is_empty() {
+                input.subject.clone()
+            } else {
+                created.subject
+            },
+        })
+    }
+
+    async fn create_draft_reply(
+        &self,
+        _account: &ConnectedAccount,
+        access_token: &str,
+        provider_message_id: &str,
+        reply_all: bool,
+        body_text: &str,
+    ) -> Result<RawDraft, ProviderError> {
+        // createReply / createReplyAll build a properly threaded draft; `comment`
+        // is placed above the quoted original. Graph handles recipients.
+        let action = if reply_all { "createReplyAll" } else { "createReply" };
+        let url = format!("{GRAPH}/messages/{provider_message_id}/{action}");
+        let created: DraftResponse =
+            post_json(&self.http, &url, access_token, &ReplyComment { comment: body_text }).await?;
+        Ok(RawDraft {
+            provider_draft_id: created.id,
+            subject: created.subject,
+        })
+    }
+}
+
+fn recipient(addr: &String) -> GraphRecipient {
+    GraphRecipient {
+        email_address: GraphAddress {
+            address: addr.clone(),
+        },
+    }
+}
+
+// --- Graph draft request/response types -------------------------------------
+
+#[derive(Serialize)]
+struct DraftRequest<'a> {
+    subject: &'a str,
+    body: GraphBody<'a>,
+    #[serde(rename = "toRecipients", skip_serializing_if = "Vec::is_empty")]
+    to_recipients: Vec<GraphRecipient>,
+    #[serde(rename = "ccRecipients", skip_serializing_if = "Vec::is_empty")]
+    cc_recipients: Vec<GraphRecipient>,
+    #[serde(rename = "bccRecipients", skip_serializing_if = "Vec::is_empty")]
+    bcc_recipients: Vec<GraphRecipient>,
+}
+
+#[derive(Serialize)]
+struct GraphBody<'a> {
+    #[serde(rename = "contentType")]
+    content_type: &'a str,
+    content: &'a str,
+}
+
+#[derive(Serialize)]
+struct GraphRecipient {
+    #[serde(rename = "emailAddress")]
+    email_address: GraphAddress,
+}
+
+#[derive(Serialize)]
+struct GraphAddress {
+    address: String,
+}
+
+#[derive(Serialize)]
+struct ReplyComment<'a> {
+    comment: &'a str,
+}
+
+#[derive(Deserialize)]
+struct DraftResponse {
+    id: String,
+    #[serde(default)]
+    subject: String,
 }
 
 // --- Graph wire types -------------------------------------------------------
@@ -279,13 +380,41 @@ async fn get_json<T: DeserializeOwned>(
             .await
             .map_err(|e| ProviderError::Unknown(e.to_string()));
     }
-    Err(match status.as_u16() {
+    Err(map_status(status))
+}
+
+async fn post_json<T: DeserializeOwned, B: Serialize>(
+    http: &reqwest::Client,
+    url: &str,
+    access_token: &str,
+    body: &B,
+) -> Result<T, ProviderError> {
+    let response = http
+        .post(url)
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|_| ProviderError::Unavailable)?;
+
+    let status = response.status();
+    if status.is_success() {
+        return response
+            .json::<T>()
+            .await
+            .map_err(|e| ProviderError::Unknown(e.to_string()));
+    }
+    Err(map_status(status))
+}
+
+fn map_status(status: reqwest::StatusCode) -> ProviderError {
+    match status.as_u16() {
         401 => ProviderError::NeedsReconnect,
         403 => ProviderError::PermissionMissing,
         429 => ProviderError::RateLimited,
         500..=599 => ProviderError::Unavailable,
         other => ProviderError::Unknown(format!("graph returned HTTP {other}")),
-    })
+    }
 }
 
 /// Crude HTML→text for message bodies (Graph returns HTML by default).

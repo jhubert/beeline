@@ -28,7 +28,9 @@ const GMAIL_PROFILE: &str = "https://gmail.googleapis.com/gmail/v1/users/me/prof
 // both Outlook.com (consumer MSA) and Microsoft 365 (work/school). SPEC §11.1.
 const MS_AUTH: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize";
 const MS_TOKEN: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
-const MS_SCOPE: &str = "openid profile offline_access Mail.Read";
+// Mail.ReadWrite covers both reading and draft creation (Graph creates drafts
+// via POST /me/messages and /createReply). No send permission is requested.
+const MS_SCOPE: &str = "openid profile offline_access Mail.ReadWrite";
 
 pub struct ConnectedIdentity {
     pub email: String,
