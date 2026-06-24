@@ -40,8 +40,8 @@ go through Google's verification *review*.
     drafts; no send tool) and the AI-transfer angle (answer: user-directed; Beeline
     transmits nothing). Verification removes the 100-user cap + ~7-day token expiry.
 
-- [ ] **Microsoft:** add `Mail.ReadWrite` (delegated) to the Entra app's API
-  permissions so draft consent is clean.
+- [x] **Microsoft:** `Mail.ReadWrite` (delegated) added to the Entra app's API
+  permissions.
 
 ---
 
