@@ -1,93 +1,96 @@
-# Beeline — road to a usable alpha
+# Beeline — road to launch
 
-The core works: real Gmail + Outlook (read), OAuth with tokens in the Keychain, a
-GUI for onboarding, and a signed + notarized DMG. This is what's left before
-Beeline is genuinely ready to hand to non-technical friends.
+The core works: real Gmail + Outlook (search, read, **draft**), OAuth with tokens
+in the Keychain, a GUI for onboarding, and a signed + notarized DMG that embeds
+its own config. This tracks what's left.
 
-Target: **friends-and-family alpha** (Google in Testing mode, ≤100 hand-added
-test users).
+Target: **public launch** — Google app verified for production (not Testing
+mode). We expect to qualify for the **client-only exemption** from the third-party
+CASA security assessment (no servers, nothing transmitted off-device), but still
+go through Google's verification *review*.
 
 ---
 
-## 🚧 Blockers — a real user can't succeed without these
+## 🚧 Blockers — before real users
 
-- [x] **Ship the OAuth client IDs inside the app.** Done: `config.rs` now falls
-  back to compile-time `option_env!` values (resolution: runtime env → config.toml
-  → embedded). `scripts/build-macos.sh` sources `config.sh` and bakes the three
-  `MAILAGENT_*` vars into the release build; `crates/core/build.rs` keeps them
-  fresh. Secrets stay out of the public repo (injected at build, not committed);
-  `mailagent doctor` reports whether config is present. Verified in a clean env.
+- [x] **Ship OAuth client config inside the app.** `config.rs` falls back to
+  compile-time `option_env!` values; `build-macos.sh` bakes them into the release
+  (secrets injected at build, not committed). Verified in a clean env.
 
-- [ ] **Test the signed DMG on a clean Mac / second macOS user account.** The dev
-  machine has `config.toml`, dev Keychain entries, and test-user access a real
-  user won't. Install the actual `.dmg` as a fresh user and run the whole flow
-  (add Gmail, add Outlook, search). This is the real validation of the config
-  fix above and of first-run.
+- [x] **Draft creation (Gmail + Outlook), ungated.** A draft is non-destructive,
+  so it isn't gated; send/archive/delete are simply not exposed. Scopes:
+  `gmail.compose`, `Mail.ReadWrite`.
 
-- [ ] **Configure the Google consent screen + add testers.** Set the privacy
-  policy URL (`https://appcamp.com/privacy/` — live), app name, logo, support
-  email, and app domain. Add each alpha user's Google address as a **Test user**
-  (Testing mode). Their Gmail cannot connect otherwise.
-  - Heads-up: Testing-mode refresh tokens expire ~weekly, so users will hit
-    "needs reconnect" every few days. Reconnect is built — just set expectations.
+- [x] **AI-connection path — decided.** No in-app integration; Claude Code runs
+  the CLI directly, Claude Desktop uses `mailagent install-mcp`.
 
-- [x] **AI-connection path — decided: no in-app integration for now.** Beeline
-  stays a neutral CLI + MCP server; connecting an AI is the user's choice:
-  Claude Code can run the `mailagent` CLI directly, and Claude Desktop / other
-  MCP clients use `mailagent install-mcp <client>`. Leans the alpha slightly more
-  technical, which is fine for friends-and-family. (See the docs task below.)
+- [ ] **Clean-machine test of the signed DMG.** Install the actual `.dmg` as a
+  fresh macOS user (no `config.toml`, no dev Keychain), then add a Gmail + an
+  Outlook account and search/draft. Real validation of first-run + embedded config.
+
+- [ ] **Google production verification.** The big one:
+  1. **Re-deploy the AppCamp site** — privacy policy + landing now say "reads and
+     drafts, never sends/deletes" (they must match the live scopes for review).
+  2. **Verify `appcamp.com`** ownership in Google Search Console.
+  3. **Data access scopes:** declare `gmail.readonly` + `gmail.compose`.
+  4. **Demo video** showing the OAuth consent + each scope's use (search/read =
+     readonly; create a draft = compose).
+  5. Submit; respond to the reviewer; complete any client-only self-attestation.
+  - Likely reviewer questions: why `gmail.compose` (answer: minimal scope for
+    drafts; no send tool) and the AI-transfer angle (answer: user-directed; Beeline
+    transmits nothing). Verification removes the 100-user cap + ~7-day token expiry.
+
+- [ ] **Microsoft:** add `Mail.ReadWrite` (delegated) to the Entra app's API
+  permissions so draft consent is clean.
 
 ---
 
 ## ⚠️ Should-do for a solid first impression
 
-- [ ] **Cache access tokens in memory (with expiry).** Every search/read currently
-  does a token-refresh round-trip — wasteful and risks provider rate limits.
+- [ ] **Cache access tokens in memory (with expiry).** Every search/read/draft
+  currently does a token-refresh round-trip — wasteful and risks rate limits.
 - [ ] **Cross-account query normalization (SPEC §14.2).** `newer_than:7d` is Gmail
-  syntax; Graph treats it as plain text. Translate normalized query fields per
-  provider so an AI gets consistent results across accounts.
-- [ ] **Concurrent cross-account search.** Sequential today; parallelize so
-  "search all" is fast with several accounts.
-- [ ] **GUI: per-account permission toggles.** Backend (`set_account_permissions`)
-  is ready; surface read/draft/etc. per account.
+  syntax; Graph treats it as plain text. Translate per provider for consistent
+  cross-account results.
+- [ ] **Concurrent cross-account search.** Sequential today; parallelize.
 - [ ] **Friendlier GUI errors** for `admin_approval_required`,
   `provider_unavailable`, and rate limiting.
 - [ ] **"Using Beeline with Claude" guide** — teach the AI to drive the CLI
-  (command reference + example prompts), plus the one-line `install-mcp` step for
-  Claude Desktop. This is the chosen alternative to in-app AI integration.
+  (command reference + example prompts) + the `install-mcp` one-liner.
 
 ---
 
-## 🔭 Post-alpha / later
+## 🔭 Post-launch / later
 
-- [ ] **Phase 3 mutating tools** — draft reply / send / archive / mark-read, gated
-  by the confirmation flow (the `confirmations` table + control-API resolve are
-  already built). This is the "draft replies" value; it requires the `serve`
-  daemon + launchd login-item to actually run so confirmations can be surfaced.
-- [ ] **launchd login-item** for the `serve` daemon (only needed once mutations /
-  confirmations ship — the read-only alpha doesn't need it).
+- [ ] **Send / archive / mark-read** — the remaining mutating tools, gated by the
+  confirmation flow (`confirmations` table + control-API resolve already built).
+  These need the `serve` daemon running so confirmations can be surfaced.
+  (Draft creation, the draft-first core, is done.)
+- [ ] **launchd login-item** for the `serve` daemon (needed once send/archive ship).
+- [ ] **GUI: per-account permission toggles** — for the send/archive tiers above
+  (drafting is ungated, so no toggle needed for it).
 - [ ] **Attachment download** with explicit confirmation.
 - [ ] **Auto-update** (Tauri updater, or Sparkle like Legal Message Export).
-- [ ] **Google verification beyond Testing mode** — brand verification + Limited
-  Use attestation. The client-only, serverless architecture should exempt us from
-  the full third-party CASA security assessment. Needed to go past 100 users.
 - [ ] **Microsoft publisher verification** — reduces the admin-consent prompt on
   some tenants.
 - [ ] **More providers** (IMAP / iCloud) behind the existing `MailProvider` trait.
 - [ ] **Provider test matrix:** Outlook.com consumer, Microsoft 365 work, Gmail
   consumer, Google Workspace.
+- [ ] **Rich-text (HTML) draft bodies** — currently plain text (a fine default).
 
 ---
 
 ## ✅ Done
 
 - Rust workspace; single `mailagent` binary = CLI + MCP server + control daemon
-- Real Gmail + Microsoft Graph (search, read), normalized; OAuth + PKCE; tokens
-  in the macOS Keychain; SQLite store; local-id indirection
-- MCP tools: `mail_list_accounts`, `mail_search`, `mail_get_message`
-- CLI: doctor, accounts, add-account, search, read, reconnect, remove-account,
-  install-mcp, mcp, serve, ctl
-- Tauri GUI: account onboarding (add / remove / reconnect), status auto-refresh
-- Reconnect flow for expired/revoked tokens
-- Signed + notarized + stapled DMG (verified accepted by Gatekeeper)
+- Real Gmail + Microsoft Graph: search, read, **draft + draft-reply** (threaded);
+  normalized; OAuth + PKCE; tokens in macOS Keychain; SQLite; local-id indirection
+- OAuth client config embedded in release builds (works with no local config)
+- MCP tools: list_accounts, search, get_message, create_draft, create_draft_reply
+- CLI: doctor, accounts, add-account, search, read, draft-reply, reconnect,
+  remove-account, install-mcp, mcp, serve, ctl
+- Tauri GUI: onboarding (add / remove / reconnect), status auto-refresh
+- Reconnect flow for expired/revoked tokens (also upgrades scope)
+- Signed + notarized + stapled DMG (Gatekeeper-accepted)
 - Privacy policy + data-flow doc + landing page; neutral local-tool positioning
+  ("reads and drafts, never sends or deletes")
