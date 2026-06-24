@@ -22,3 +22,6 @@ config.sh
 
 # internal design spec — kept local, not distributed
 SPEC.md
+
+# source art — large, keep local only
+*.psd
