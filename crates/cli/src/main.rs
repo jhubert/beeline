@@ -34,11 +34,26 @@ enum Command {
     },
     /// Search mail across accounts.
     Search {
-        /// Free-text query (provider search syntax supported, e.g. "from:bruce").
-        query: String,
+        /// Free-text query.
+        query: Option<String>,
         /// Account alias, or "all".
         #[arg(long, default_value = "all")]
         account: String,
+        /// Match sender.
+        #[arg(long)]
+        from: Option<String>,
+        /// Match recipient.
+        #[arg(long)]
+        to: Option<String>,
+        /// Match subject.
+        #[arg(long)]
+        subject: Option<String>,
+        /// ISO date (YYYY-MM-DD) lower bound.
+        #[arg(long)]
+        since: Option<String>,
+        /// ISO date (YYYY-MM-DD) upper bound.
+        #[arg(long)]
+        before: Option<String>,
         /// Max results.
         #[arg(long)]
         limit: Option<u32>,
@@ -122,14 +137,24 @@ async fn main() -> anyhow::Result<()> {
         Command::Search {
             query,
             account,
+            from,
+            to,
+            subject,
+            since,
+            before,
             limit,
             unread,
         } => {
             let q = mailagent_types::MailSearchQuery {
-                free_text: (!query.is_empty()).then_some(query),
+                free_text: query.filter(|s| !s.is_empty()),
+                from,
+                to,
+                subject,
+                since,
+                before,
                 unread_only: unread.then_some(true),
+                has_attachments: None,
                 limit,
-                ..Default::default()
             };
             let found = agent.search(&account, &q).await?;
             if found.results.is_empty() {

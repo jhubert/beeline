@@ -316,22 +316,18 @@ impl MailAgent {
     }
 
     /// Cross-account search (SPEC.md §14.1). `selector` is an alias or "all".
-    /// Per-account failures become partial failures rather than failing the
-    /// whole search. Provider calls will run concurrently once real adapters
-    /// land (Phase 1); the stubs are cheap enough to run sequentially here.
+    /// Each account's provider call runs concurrently; per-account failures
+    /// become partial failures rather than failing the whole search.
     pub async fn search(
         &self,
         selector: &str,
         query: &MailSearchQuery,
     ) -> anyhow::Result<SearchResults> {
-        let mut results = Vec::new();
         let mut partial_failures = Vec::new();
+        let mut searchable = Vec::new();
 
         for account in self.db.list_accounts()? {
-            if !account.enabled {
-                continue;
-            }
-            if selector != "all" && selector != account.alias {
+            if !account.enabled || (selector != "all" && selector != account.alias) {
                 continue;
             }
             if !policy::can_read(&account) {
@@ -341,41 +337,48 @@ impl MailAgent {
                 });
                 continue;
             }
-            let Some(provider) = self.providers.get(&account.provider) else {
-                continue;
-            };
+            searchable.push(account);
+        }
 
-            // A token failure (revoked/expired refresh token) is reported as a
-            // per-account partial failure, not a whole-search failure.
-            let token = match self.access_token(&account).await {
+        // Fetch a token and query each account concurrently — the network calls
+        // are the slow part. (Token failures and provider errors are returned per
+        // account, not propagated.)
+        let per_account = futures::future::join_all(searchable.iter().map(|account| async move {
+            let token = match self.access_token(account).await {
                 Ok(token) => token,
-                Err(e) => {
-                    partial_failures.push(PartialFailure {
-                        account_alias: account.alias.clone(),
-                        reason: e.to_string(),
-                    });
-                    continue;
-                }
+                Err(e) => return (account, Err(e.to_string())),
             };
+            let outcome = match self.providers.get(&account.provider) {
+                Some(provider) => provider
+                    .search_messages(account, &token, query)
+                    .await
+                    .map_err(|e| e.to_string()),
+                None => Ok(Vec::new()),
+            };
+            (account, outcome)
+        }))
+        .await;
 
-            match provider.search_messages(&account, &token, query).await {
+        // Mint local ids + stamp account fields (DB writes, kept sequential).
+        let mut results = Vec::new();
+        for (account, outcome) in per_account {
+            match outcome {
                 Ok(hits) => {
                     for (provider_message_id, mut summary) in hits {
-                        let local_id = self.db.mint_local_id(&ProviderRef {
+                        summary.local_message_id = self.db.mint_local_id(&ProviderRef {
                             provider: account.provider,
                             account_id: account.id.clone(),
                             provider_message_id,
                         })?;
-                        summary.local_message_id = local_id;
                         summary.account_id = account.id.clone();
                         summary.account_alias = account.alias.clone();
                         summary.account_email = account.email.clone();
                         results.push(summary);
                     }
                 }
-                Err(e) => partial_failures.push(PartialFailure {
+                Err(reason) => partial_failures.push(PartialFailure {
                     account_alias: account.alias.clone(),
-                    reason: e.to_string(),
+                    reason,
                 }),
             }
         }

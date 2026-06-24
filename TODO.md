@@ -50,10 +50,11 @@ go through Google's verification *review*.
 - [x] **Cache access tokens in memory (with expiry).** Done: tokens cached per
   account until ~60s before expiry; invalidated on reconnect / removal /
   needs_reconnect. No more refresh on every call.
-- [ ] **Cross-account query normalization (SPEC §14.2).** `newer_than:7d` is Gmail
-  syntax; Graph treats it as plain text. Translate per provider for consistent
-  cross-account results.
-- [ ] **Concurrent cross-account search.** Sequential today; parallelize.
+- [x] **Cross-account query normalization (SPEC §14.2).** Done: `mail_search` /
+  CLI expose structured fields (from, to, subject, since, before); providers
+  translate each per their syntax, so the agent avoids provider-specific operators.
+- [x] **Concurrent cross-account search.** Done: per-account token+search runs via
+  `join_all`; results merged and sorted newest-first.
 - [ ] **Friendlier GUI errors** for `admin_approval_required`,
   `provider_unavailable`, and rate limiting.
 - [ ] **"Using Beeline with Claude" guide** — teach the AI to drive the CLI

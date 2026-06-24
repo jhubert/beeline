@@ -79,16 +79,20 @@ fn tool_schemas() -> Value {
         },
         {
             "name": "mail_search",
-            "description": "Search messages across one or all connected accounts.",
+            "description": "Search messages across one or all connected accounts. Prefer the structured fields (from, to, subject, since, before) over provider-specific operators in `query` — they translate consistently across Gmail and Outlook.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "account": { "type": "string", "description": "Account alias or \"all\"." },
-                    "query": { "type": "string" },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+                    "query": { "type": "string", "description": "Free-text search." },
+                    "from": { "type": "string", "description": "Sender to match." },
+                    "to": { "type": "string", "description": "Recipient to match." },
+                    "subject": { "type": "string" },
+                    "since": { "type": "string", "description": "ISO date (YYYY-MM-DD) lower bound." },
+                    "before": { "type": "string", "description": "ISO date (YYYY-MM-DD) upper bound." },
                     "unreadOnly": { "type": "boolean" },
                     "hasAttachments": { "type": "boolean" },
-                    "since": { "type": "string", "description": "ISO date lower bound." }
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
                 }
             }
         },
@@ -153,11 +157,14 @@ async fn call_tool(agent: &MailAgent, params: Option<&Value>) -> anyhow::Result<
                 .to_string();
             let query = MailSearchQuery {
                 free_text: str_arg(&args, "query"),
+                from: str_arg(&args, "from"),
+                to: str_arg(&args, "to"),
+                subject: str_arg(&args, "subject"),
                 since: str_arg(&args, "since"),
+                before: str_arg(&args, "before"),
                 unread_only: args.get("unreadOnly").and_then(Value::as_bool),
                 has_attachments: args.get("hasAttachments").and_then(Value::as_bool),
                 limit: args.get("limit").and_then(Value::as_u64).map(|n| n as u32),
-                ..Default::default()
             };
             serde_json::to_value(agent.search(&selector, &query).await?)?
         }
