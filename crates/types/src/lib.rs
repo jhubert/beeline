@@ -183,6 +183,36 @@ pub struct MessageDetail {
     pub attachments: Vec<AttachmentSummary>,
 }
 
+/// Input for a new draft (SPEC.md §13.5). Addresses are raw strings as the
+/// agent supplies them.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftInput {
+    #[serde(default)]
+    pub to: Vec<String>,
+    #[serde(default)]
+    pub cc: Vec<String>,
+    #[serde(default)]
+    pub bcc: Vec<String>,
+    #[serde(default)]
+    pub subject: String,
+    #[serde(default)]
+    pub body_text: String,
+}
+
+/// A created draft (SPEC.md §8.4). Draft-first: the agent makes these; the user
+/// reviews and sends from their mail app.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftResult {
+    pub local_draft_id: String,
+    pub account_id: String,
+    pub account_alias: String,
+    pub subject: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub open_in_provider_url: Option<String>,
+}
+
 /// Internal normalized query (SPEC.md §14.2). The MCP layer accepts simple
 /// natural parameters; adapters translate to provider-specific search syntax.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

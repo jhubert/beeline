@@ -16,8 +16,8 @@ use mailagent_storage::{
     AuditEvent, Confirmation, Db, KeyringStore, MemorySecretStore, ProviderRef, SecretStore,
 };
 use mailagent_types::{
-    AccountStatus, ConnectedAccount, MailSearchQuery, MessageDetail, MessageSummary, Permissions,
-    Provider,
+    AccountStatus, ConnectedAccount, DraftInput, DraftResult, MailSearchQuery, MessageDetail,
+    MessageSummary, Permissions, Provider,
 };
 use serde::Serialize;
 
@@ -385,6 +385,101 @@ impl MailAgent {
         detail.summary.account_alias = account.alias.clone();
         detail.summary.account_email = account.email.clone();
         Ok(detail)
+    }
+
+    // --- drafts (SPEC.md §13.5–13.6) — draft-first; requires draft permission --
+
+    pub async fn create_draft(
+        &self,
+        account_alias: &str,
+        input: DraftInput,
+    ) -> anyhow::Result<DraftResult> {
+        let account = self
+            .db
+            .list_accounts()?
+            .into_iter()
+            .find(|a| a.alias == account_alias || a.id == account_alias)
+            .ok_or_else(|| anyhow::anyhow!("no account matching '{account_alias}'"))?;
+        let provider_kind = account.provider;
+        let account_for_call = account.clone();
+        self.draft(&account, provider_kind, move |provider, token| async move {
+            provider.create_draft(&account_for_call, &token, &input).await
+        })
+        .await
+    }
+
+    pub async fn create_draft_reply(
+        &self,
+        local_message_id: &str,
+        reply_all: bool,
+        body_text: &str,
+    ) -> anyhow::Result<DraftResult> {
+        let reference = self
+            .db
+            .resolve_local_id(local_message_id)?
+            .ok_or_else(|| anyhow::anyhow!("unknown localMessageId: {local_message_id}"))?;
+        let account = self
+            .db
+            .get_account(&reference.account_id)?
+            .ok_or_else(|| anyhow::anyhow!("account not found for message"))?;
+        let provider_kind = reference.provider;
+        let account_for_call = account.clone();
+        let provider_message_id = reference.provider_message_id.clone();
+        let body = body_text.to_string();
+        self.draft(&account, provider_kind, move |provider, token| async move {
+            provider
+                .create_draft_reply(&account_for_call, &token, &provider_message_id, reply_all, &body)
+                .await
+        })
+        .await
+    }
+
+    /// Shared draft path: permission gate → token → provider call → mint local
+    /// draft id → audit.
+    async fn draft<F, Fut>(
+        &self,
+        account: &ConnectedAccount,
+        provider_kind: Provider,
+        call: F,
+    ) -> anyhow::Result<DraftResult>
+    where
+        F: FnOnce(Arc<dyn MailProvider>, String) -> Fut,
+        Fut: std::future::Future<Output = Result<mailagent_providers::RawDraft, mailagent_providers::ProviderError>>,
+    {
+        if !policy::can_create_draft(account) {
+            anyhow::bail!(
+                "draft permission not enabled for account {} (enable it first)",
+                account.alias
+            );
+        }
+        let provider = self
+            .providers
+            .get(&provider_kind)
+            .ok_or_else(|| anyhow::anyhow!("provider not available"))?
+            .clone();
+        let token = self.access_token(account).await?;
+
+        let raw = call(provider, token)
+            .await
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+
+        let local_draft_id =
+            self.db
+                .mint_draft_id(account.provider, &account.id, &raw.provider_draft_id)?;
+        self.db.record_audit(
+            Some(&account.alias),
+            Some(account.provider),
+            "draft_created",
+            true,
+            None,
+        )?;
+        Ok(DraftResult {
+            local_draft_id,
+            account_id: account.id.clone(),
+            account_alias: account.alias.clone(),
+            subject: raw.subject,
+            open_in_provider_url: None,
+        })
     }
 }
 

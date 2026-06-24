@@ -6,12 +6,12 @@ use async_trait::async_trait;
 use base64::engine::general_purpose::URL_SAFE;
 use base64::Engine;
 use mailagent_types::{
-    AttachmentSummary, ConnectedAccount, EmailAddress, MailSearchQuery, MessageDetail,
+    AttachmentSummary, ConnectedAccount, DraftInput, EmailAddress, MailSearchQuery, MessageDetail,
     MessageSummary, Provider,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::{MailProvider, ProviderError, RawHit};
+use crate::{MailProvider, ProviderError, RawDraft, RawHit};
 
 const BASE: &str = "https://gmail.googleapis.com/gmail/v1/users/me";
 
@@ -71,6 +71,140 @@ impl MailProvider for GmailProvider {
         let message: GmailMessage = get_json(&self.http, &url, access_token).await?;
         Ok(to_detail(&message))
     }
+
+    async fn create_draft(
+        &self,
+        _account: &ConnectedAccount,
+        access_token: &str,
+        input: &DraftInput,
+    ) -> Result<RawDraft, ProviderError> {
+        let mime = build_mime(&input.to, &input.cc, &input.bcc, &input.subject, &input.body_text, &[]);
+        let request = DraftCreate {
+            message: DraftMessage {
+                raw: URL_SAFE.encode(mime.as_bytes()),
+                thread_id: None,
+            },
+        };
+        let created: DraftResponse =
+            post_json(&self.http, &format!("{BASE}/drafts"), access_token, &request).await?;
+        Ok(RawDraft {
+            provider_draft_id: created.id,
+            subject: input.subject.clone(),
+        })
+    }
+
+    async fn create_draft_reply(
+        &self,
+        account: &ConnectedAccount,
+        access_token: &str,
+        provider_message_id: &str,
+        reply_all: bool,
+        body_text: &str,
+    ) -> Result<RawDraft, ProviderError> {
+        // Pull the headers we need to thread the reply correctly.
+        let url = format!(
+            "{BASE}/messages/{provider_message_id}?format=metadata\
+             &metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc\
+             &metadataHeaders=Subject&metadataHeaders=Message-ID"
+        );
+        let original: GmailMessage = get_json(&self.http, &url, access_token).await?;
+        let payload = original.payload.as_ref();
+        let header_value = |name: &str| {
+            payload
+                .and_then(|p| header(p, name))
+                .unwrap_or("")
+                .to_string()
+        };
+
+        let from = header_value("From");
+        let subject = header_value("Subject");
+        let message_id = header_value("Message-ID");
+
+        let to = vec![from.clone()];
+        let mut cc = Vec::new();
+        if reply_all {
+            let self_addr = account.email.to_lowercase();
+            for list in [header_value("To"), header_value("Cc")] {
+                for addr in list.split(',').map(str::trim).filter(|a| !a.is_empty()) {
+                    let lower = addr.to_lowercase();
+                    if !lower.contains(&self_addr) && !addr.eq_ignore_ascii_case(&from) {
+                        cc.push(addr.to_string());
+                    }
+                }
+            }
+        }
+
+        let reply_subject = if subject.to_lowercase().starts_with("re:") {
+            subject
+        } else {
+            format!("Re: {subject}")
+        };
+        let mut extra: Vec<(&str, String)> = Vec::new();
+        if !message_id.is_empty() {
+            extra.push(("In-Reply-To", message_id.clone()));
+            extra.push(("References", message_id));
+        }
+
+        let mime = build_mime(&to, &cc, &[], &reply_subject, body_text, &extra);
+        let request = DraftCreate {
+            message: DraftMessage {
+                raw: URL_SAFE.encode(mime.as_bytes()),
+                thread_id: (!original.thread_id.is_empty()).then(|| original.thread_id.clone()),
+            },
+        };
+        let created: DraftResponse =
+            post_json(&self.http, &format!("{BASE}/drafts"), access_token, &request).await?;
+        Ok(RawDraft {
+            provider_draft_id: created.id,
+            subject: reply_subject,
+        })
+    }
+}
+
+#[derive(Serialize)]
+struct DraftCreate {
+    message: DraftMessage,
+}
+
+#[derive(Serialize)]
+struct DraftMessage {
+    raw: String,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "threadId")]
+    thread_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct DraftResponse {
+    id: String,
+}
+
+/// Minimal RFC 822 text/plain message for the Gmail `raw` field.
+fn build_mime(
+    to: &[String],
+    cc: &[String],
+    bcc: &[String],
+    subject: &str,
+    body: &str,
+    extra_headers: &[(&str, String)],
+) -> String {
+    let mut m = String::new();
+    if !to.is_empty() {
+        m.push_str(&format!("To: {}\r\n", to.join(", ")));
+    }
+    if !cc.is_empty() {
+        m.push_str(&format!("Cc: {}\r\n", cc.join(", ")));
+    }
+    if !bcc.is_empty() {
+        m.push_str(&format!("Bcc: {}\r\n", bcc.join(", ")));
+    }
+    m.push_str(&format!("Subject: {subject}\r\n"));
+    for (k, v) in extra_headers {
+        m.push_str(&format!("{k}: {v}\r\n"));
+    }
+    m.push_str("MIME-Version: 1.0\r\n");
+    m.push_str("Content-Type: text/plain; charset=\"UTF-8\"\r\n\r\n");
+    m.push_str(body);
+    m
 }
 
 // --- Gmail API wire types ---------------------------------------------------
@@ -87,6 +221,8 @@ struct MessageRef {
 
 #[derive(Deserialize)]
 struct GmailMessage {
+    #[serde(default, rename = "threadId")]
+    thread_id: String,
     #[serde(default, rename = "labelIds")]
     label_ids: Vec<String>,
     #[serde(default)]
@@ -251,12 +387,40 @@ async fn get_json<T: serde::de::DeserializeOwned>(
             .await
             .map_err(|e| ProviderError::Unknown(e.to_string()));
     }
-    Err(match status.as_u16() {
+    Err(map_status(status))
+}
+
+async fn post_json<T: serde::de::DeserializeOwned, B: Serialize>(
+    http: &reqwest::Client,
+    url: &str,
+    access_token: &str,
+    body: &B,
+) -> Result<T, ProviderError> {
+    let response = http
+        .post(url)
+        .bearer_auth(access_token)
+        .json(body)
+        .send()
+        .await
+        .map_err(|_| ProviderError::Unavailable)?;
+
+    let status = response.status();
+    if status.is_success() {
+        return response
+            .json::<T>()
+            .await
+            .map_err(|e| ProviderError::Unknown(e.to_string()));
+    }
+    Err(map_status(status))
+}
+
+fn map_status(status: reqwest::StatusCode) -> ProviderError {
+    match status.as_u16() {
         401 | 403 => ProviderError::NeedsReconnect,
         429 => ProviderError::RateLimited,
         500..=599 => ProviderError::Unavailable,
         other => ProviderError::Unknown(format!("gmail returned HTTP {other}")),
-    })
+    }
 }
 
 fn urlencode(s: &str) -> String {

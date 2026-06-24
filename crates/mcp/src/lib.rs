@@ -104,6 +104,35 @@ fn tool_schemas() -> Value {
                 },
                 "required": ["localMessageId"]
             }
+        },
+        {
+            "name": "mail_create_draft",
+            "description": "Create a new draft (the user reviews and sends it themselves).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "account": { "type": "string", "description": "Account alias." },
+                    "to": { "type": "array", "items": { "type": "string" } },
+                    "cc": { "type": "array", "items": { "type": "string" } },
+                    "bcc": { "type": "array", "items": { "type": "string" } },
+                    "subject": { "type": "string" },
+                    "bodyText": { "type": "string" }
+                },
+                "required": ["account"]
+            }
+        },
+        {
+            "name": "mail_create_draft_reply",
+            "description": "Create a draft reply to a message (the user reviews and sends it).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "localMessageId": { "type": "string" },
+                    "replyAll": { "type": "boolean" },
+                    "bodyText": { "type": "string" }
+                },
+                "required": ["localMessageId", "bodyText"]
+            }
         }
     ])
 }
@@ -139,6 +168,27 @@ async fn call_tool(agent: &MailAgent, params: Option<&Value>) -> anyhow::Result<
                 .and_then(Value::as_str)
                 .ok_or_else(|| anyhow::anyhow!("localMessageId is required"))?;
             json!({ "message": agent.get_message(local_id).await? })
+        }
+
+        "mail_create_draft" => {
+            let account = args
+                .get("account")
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow::anyhow!("account is required"))?
+                .to_string();
+            let input: mailagent_types::DraftInput = serde_json::from_value(args.clone())
+                .map_err(|e| anyhow::anyhow!("invalid draft input: {e}"))?;
+            json!({ "draft": agent.create_draft(&account, input).await? })
+        }
+
+        "mail_create_draft_reply" => {
+            let local_id = args
+                .get("localMessageId")
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow::anyhow!("localMessageId is required"))?;
+            let reply_all = args.get("replyAll").and_then(Value::as_bool).unwrap_or(false);
+            let body = args.get("bodyText").and_then(Value::as_str).unwrap_or("");
+            json!({ "draft": agent.create_draft_reply(local_id, reply_all, body).await? })
         }
 
         other => anyhow::bail!("unknown tool: {other}"),

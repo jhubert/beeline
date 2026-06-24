@@ -17,7 +17,11 @@ use crate::config::OAuthConfig;
 
 const GOOGLE_AUTH: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN: &str = "https://oauth2.googleapis.com/token";
-const GMAIL_SCOPE: &str = "https://www.googleapis.com/auth/gmail.readonly";
+// Read-only access + draft creation. `gmail.compose` is the minimal scope that
+// allows creating drafts (there is no draft-only scope). We never expose a send
+// tool — drafts are reviewed and sent by the user in their mail app.
+const GMAIL_SCOPE: &str =
+    "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose";
 const GMAIL_PROFILE: &str = "https://gmail.googleapis.com/gmail/v1/users/me/profile";
 
 // Multi-tenant + personal accounts (the "common" authority) so one app covers

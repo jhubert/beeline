@@ -7,7 +7,15 @@
 //! sketch) once client IDs are available.
 
 use async_trait::async_trait;
-use mailagent_types::{ConnectedAccount, MailSearchQuery, MessageDetail, MessageSummary, Provider};
+use mailagent_types::{
+    ConnectedAccount, DraftInput, MailSearchQuery, MessageDetail, MessageSummary, Provider,
+};
+
+/// A created draft's provider id + the subject it ended up with.
+pub struct RawDraft {
+    pub provider_draft_id: String,
+    pub subject: String,
+}
 
 pub mod gmail;
 pub mod microsoft;
@@ -56,4 +64,31 @@ pub trait MailProvider: Send + Sync {
         access_token: &str,
         provider_message_id: &str,
     ) -> Result<MessageDetail, ProviderError>;
+
+    /// Create a new draft (SPEC.md §13.5). Default impl: unsupported.
+    async fn create_draft(
+        &self,
+        _account: &ConnectedAccount,
+        _access_token: &str,
+        _input: &DraftInput,
+    ) -> Result<RawDraft, ProviderError> {
+        Err(ProviderError::Unknown(
+            "draft creation not supported for this provider yet".into(),
+        ))
+    }
+
+    /// Create a draft reply to an existing message (SPEC.md §13.6). Default
+    /// impl: unsupported.
+    async fn create_draft_reply(
+        &self,
+        _account: &ConnectedAccount,
+        _access_token: &str,
+        _provider_message_id: &str,
+        _reply_all: bool,
+        _body_text: &str,
+    ) -> Result<RawDraft, ProviderError> {
+        Err(ProviderError::Unknown(
+            "draft replies not supported for this provider yet".into(),
+        ))
+    }
 }

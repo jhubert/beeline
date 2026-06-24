@@ -222,6 +222,32 @@ impl Db {
         Ok(format!("local_msg_{}", conn.last_insert_rowid()))
     }
 
+    /// Mint a `local_draft_*` id for a created draft (SPEC.md §9).
+    pub fn mint_draft_id(
+        &self,
+        provider: Provider,
+        account_id: &str,
+        provider_draft_id: &str,
+    ) -> anyhow::Result<String> {
+        let conn = self.conn.lock().unwrap();
+        let existing: Option<i64> = conn
+            .query_row(
+                "SELECT seq FROM local_ids WHERE kind='draft' AND account_id=?1 AND provider_id=?2",
+                params![account_id, provider_draft_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(seq) = existing {
+            return Ok(format!("local_draft_{seq}"));
+        }
+        conn.execute(
+            "INSERT INTO local_ids (kind, provider, account_id, provider_id)
+             VALUES ('draft', ?1, ?2, ?3)",
+            params![provider.as_str(), account_id, provider_draft_id],
+        )?;
+        Ok(format!("local_draft_{}", conn.last_insert_rowid()))
+    }
+
     pub fn resolve_local_id(&self, local_id: &str) -> anyhow::Result<Option<ProviderRef>> {
         let Some(seq) = local_id
             .strip_prefix("local_msg_")
