@@ -42,12 +42,13 @@ never an intermediary server.
 
 | Provider | Scopes | Flow |
 |----------|--------|------|
-| Google (Gmail) | `gmail.readonly` + `gmail.compose` (+ offline access) | Auth-code + PKCE, loopback redirect; desktop client |
+| Google (Gmail) | `gmail.readonly` + `gmail.drafts.create` (+ offline access) | Auth-code + PKCE, loopback redirect; desktop client |
 | Microsoft (Graph) | `openid profile offline_access Mail.ReadWrite` | Auth-code + PKCE, loopback redirect; public client, `common` authority |
 
-`gmail.compose` / `Mail.ReadWrite` are the minimal scopes that allow draft
-creation; there is no draft-only scope. **No send tool is exposed** — Beeline
-creates drafts and never sends. Send / archive / move, if added later, are gated
+`gmail.drafts.create` is create-only and **cannot send** (narrower than
+`gmail.compose`); `Mail.ReadWrite` is the minimal Graph scope that allows draft
+creation. **No send tool is exposed** — Beeline creates drafts and never sends.
+Send / archive / move, if added later, are gated
 by the confirmation flow.
 
 ## User-directed transfer
