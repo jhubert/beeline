@@ -63,10 +63,20 @@
 
       <p id="status"></p>
 
+      <section>
+        <h2>Command-line tool</h2>
+        <div class="acct">
+          <span id="cli-state">Use Beeline from the terminal as <code>beeline</code>.</span>
+          <span class="actions">
+            <button id="install-cli">Install command-line tool</button>
+          </span>
+        </div>
+      </section>
+
       <p style="font-size:12px;color:var(--muted);margin-top:24px">
         Beeline runs entirely on your Mac — no servers, and it never transmits
         your mail anywhere. To use it with an AI assistant or your own scripts,
-        point an MCP client at <code>mailagent mcp</code>.
+        point an MCP client at <code>beeline mcp</code>.
         <a href="https://github.com/jhubert/beeline#connecting-a-client" target="_blank">Learn how →</a>
       </p>
     </main>
@@ -144,8 +154,32 @@
         }
       }
 
+      async function refreshCli() {
+        const stateEl = document.getElementById("cli-state");
+        const btn = document.getElementById("install-cli");
+        try {
+          const installed = await invoke("cli_installed");
+          btn.hidden = installed;
+          stateEl.innerHTML = installed
+            ? "Command-line tool · <b>installed ✓</b> — run <code>beeline</code> in any terminal."
+            : "Use Beeline from the terminal as <code>beeline</code>.";
+        } catch (e) {
+          setStatus(String(e), true);
+        }
+      }
+
       document.getElementById("add-gmail").onclick = () => addAccount("gmail");
       document.getElementById("add-outlook").onclick = () => addAccount("microsoft");
+      document.getElementById("install-cli").onclick = async () => {
+        setStatus("Installing the command-line tool…");
+        try {
+          await invoke("install_cli");
+          setStatus("Installed — run `beeline` in any terminal.");
+          refreshCli();
+        } catch (e) {
+          setStatus(String(e), true);
+        }
+      };
 
       // Keep the list current: account status can change while the window is
       // open (e.g. a connected AI hits an expired token), so refresh on focus
@@ -154,6 +188,7 @@
       setInterval(refresh, 30000);
 
       refresh();
+      refreshCli();
     </script>
   </body>
 </html>

@@ -50,6 +50,23 @@ async fn set_permissions(
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn cli_installed() -> Result<bool, String> {
+    Ok(mailagent_core::cli_installed())
+}
+
+#[tauri::command]
+async fn install_cli() -> Result<(), String> {
+    // The bundled `beeline` CLI sidecar sits next to the GUI binary.
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let sidecar = exe
+        .parent()
+        .map(|d| d.join("beeline"))
+        .filter(|p| p.exists())
+        .ok_or_else(|| "beeline helper not found next to the app".to_string())?;
+    mailagent_core::install_cli(&sidecar).map_err(|e| e.to_string())
+}
+
 fn main() {
     let db_path = mailagent_core::default_db_path().expect("resolve data dir");
     let agent = MailAgent::open(&db_path).expect("open mailagent store");
@@ -61,7 +78,9 @@ fn main() {
             add_account,
             reconnect_account,
             remove_account,
-            set_permissions
+            set_permissions,
+            cli_installed,
+            install_cli
         ])
         .run(tauri::generate_context!())
         .expect("error while running Beeline");

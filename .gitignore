@@ -25,3 +25,6 @@ SPEC.md
 
 # source art — large, keep local only
 *.psd
+
+# demo / scratch media (keep local, not in git)
+*.mp4

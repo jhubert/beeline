@@ -79,6 +79,8 @@ enum Command {
         #[arg(default_value = "claude")]
         client: String,
     },
+    /// Symlink this binary to /usr/local/bin/beeline (prompts for admin).
+    InstallCli,
     /// Start the MCP server on stdio (launched by AI clients).
     Mcp,
     /// Run the control-API daemon for the GUI (launchd login-item, model B).
@@ -209,6 +211,11 @@ async fn main() -> anyhow::Result<()> {
                 "Registered Beeline with {client}: {}\nRestart {client} to load the tools.",
                 path.display()
             );
+        }
+        Command::InstallCli => {
+            let exe = std::env::current_exe()?;
+            mailagent_core::install_cli(&exe)?;
+            println!("Installed: `beeline` is now on your PATH (/usr/local/bin/beeline).");
         }
         Command::Mcp => mailagent_mcp::run_stdio(agent).await?,
         Command::Serve => {

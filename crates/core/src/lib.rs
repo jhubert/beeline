@@ -552,6 +552,38 @@ fn data_dir() -> anyhow::Result<PathBuf> {
     Ok(dir)
 }
 
+/// Where the `beeline` command is symlinked — on the default macOS PATH.
+const CLI_SYMLINK: &str = "/usr/local/bin/beeline";
+
+/// Whether the `beeline` CLI is installed on PATH.
+pub fn cli_installed() -> bool {
+    Path::new(CLI_SYMLINK).exists()
+}
+
+/// Symlink `source` to `/usr/local/bin/beeline` so it runs as `beeline` from any
+/// terminal. That directory needs admin rights, so we prompt once via osascript
+/// (the native password dialog).
+pub fn install_cli(source: &Path) -> anyhow::Result<()> {
+    if !source.exists() {
+        anyhow::bail!("binary not found at {}", source.display());
+    }
+    // Single-quote the paths for the shell; app paths won't contain quotes.
+    let shell = format!(
+        "mkdir -p /usr/local/bin && ln -sf '{}' '{}'",
+        source.display(),
+        CLI_SYMLINK
+    );
+    let script = format!("do shell script \"{shell}\" with administrator privileges");
+    let status = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .status()?;
+    if !status.success() {
+        anyhow::bail!("command-line tool install was cancelled");
+    }
+    Ok(())
+}
+
 /// Register Beeline's MCP server in an AI client's config (SPEC.md §16.4).
 /// `mcp_binary` is the path to the `beeline` binary the client should spawn
 /// with `mcp` — the CLI passes its own path; the GUI passes the helper binary
